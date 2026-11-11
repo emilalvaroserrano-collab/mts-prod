@@ -9,13 +9,15 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as SplatRouteImport } from './routes/$'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as PortalRouteImport } from './routes/portal'
-import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as UpgradeRouteImport } from './routes/upgrade'
 import { Route as AppAccessRouteImport } from './routes/_app/access'
 import { Route as AppCampaignsRouteImport } from './routes/_app/campaigns'
+import { Route as AppDashboardRouteImport } from './routes/_app/dashboard'
 import { Route as AppDocsRouteImport } from './routes/_app/docs'
 import { Route as AppFormsRouteImport } from './routes/_app/forms'
 import { Route as AppIntegrationsRouteImport } from './routes/_app/integrations'
@@ -41,6 +43,11 @@ import { Route as PortalQuotesRouteImport } from './routes/portal/quotes'
 import { Route as PortalRegisterRouteImport } from './routes/portal/register'
 import { Route as PortalShopRouteImport } from './routes/portal/shop'
 import { Route as PortalVerifyRouteImport } from './routes/portal/verify'
+import { Route as ProductionIndexRouteImport } from './routes/production/index'
+import { Route as ProductionHomeRouteImport } from './routes/production/home'
+import { Route as ProductionSignInRouteImport } from './routes/production/sign-in'
+import { Route as ProductionSigninRouteImport } from './routes/production/signin'
+import { Route as ProductionUserPortalRouteImport } from './routes/production/user-portal'
 import { Route as AppNotificationsIndexRouteImport } from './routes/_app/notifications/index'
 import { Route as AppNotificationsNotificationIdRouteImport } from './routes/_app/notifications/$notificationId'
 import { Route as AppOrdersIndexRouteImport } from './routes/_app/orders/index'
@@ -52,6 +59,8 @@ import { Route as AppTicketsTicketIdRouteImport } from './routes/_app/tickets/$t
 import { Route as ApiAgentSplatRouteImport } from './routes/api/agent/$'
 import { Route as ApiAuthSplatRouteImport } from './routes/api/auth/$'
 import { Route as ApiJobsRunRouteImport } from './routes/api/jobs/run'
+import { Route as ApiOauthAuthorizeRouteImport } from './routes/api/oauth/authorize'
+import { Route as ApiOauthTokenRouteImport } from './routes/api/oauth/token'
 import { Route as ApiPaymentsAlternativeRouteImport } from './routes/api/payments/alternative'
 import { Route as ApiZendeskWebhookRouteImport } from './routes/api/zendesk/webhook'
 import { Route as PortalOrdersIndexRouteImport } from './routes/portal/orders/index'
@@ -68,6 +77,11 @@ import { Route as StoreSlugCheckoutRouteImport } from './routes/store/$slug/chec
 import { Route as StoreSlugServicesRouteImport } from './routes/store/$slug/services'
 import { Route as StoreSlugTicketsRouteImport } from './routes/store/$slug/tickets'
 
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SplatRoute = SplatRouteImport.update({
   id: '/$',
   path: '/$',
@@ -87,10 +101,10 @@ const PortalRoute = PortalRouteImport.update({
   path: '/portal',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AppIndexRoute = AppIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => AppRoute,
+const UpgradeRoute = UpgradeRouteImport.update({
+  id: '/upgrade',
+  path: '/upgrade',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AppAccessRoute = AppAccessRouteImport.update({
   id: '/access',
@@ -100,6 +114,11 @@ const AppAccessRoute = AppAccessRouteImport.update({
 const AppCampaignsRoute = AppCampaignsRouteImport.update({
   id: '/campaigns',
   path: '/campaigns',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppDashboardRoute = AppDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => AppRoute,
 } as any)
 const AppDocsRoute = AppDocsRouteImport.update({
@@ -227,6 +246,31 @@ const PortalVerifyRoute = PortalVerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => PortalRoute,
 } as any)
+const ProductionIndexRoute = ProductionIndexRouteImport.update({
+  id: '/production/',
+  path: '/production/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionHomeRoute = ProductionHomeRouteImport.update({
+  id: '/production/home',
+  path: '/production/home',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionSignInRoute = ProductionSignInRouteImport.update({
+  id: '/production/sign-in',
+  path: '/production/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionSigninRoute = ProductionSigninRouteImport.update({
+  id: '/production/signin',
+  path: '/production/signin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProductionUserPortalRoute = ProductionUserPortalRouteImport.update({
+  id: '/production/user-portal',
+  path: '/production/user-portal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AppNotificationsIndexRoute = AppNotificationsIndexRouteImport.update({
   id: '/notifications/',
   path: '/notifications/',
@@ -281,6 +325,16 @@ const ApiAuthSplatRoute = ApiAuthSplatRouteImport.update({
 const ApiJobsRunRoute = ApiJobsRunRouteImport.update({
   id: '/api/jobs/run',
   path: '/api/jobs/run',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthAuthorizeRoute = ApiOauthAuthorizeRouteImport.update({
+  id: '/api/oauth/authorize',
+  path: '/api/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthTokenRoute = ApiOauthTokenRouteImport.update({
+  id: '/api/oauth/token',
+  path: '/api/oauth/token',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiPaymentsAlternativeRoute = ApiPaymentsAlternativeRouteImport.update({
@@ -360,12 +414,14 @@ const StoreSlugTicketsRoute = StoreSlugTicketsRouteImport.update({
 } as any)
 
 export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
   '/$': typeof SplatRoute
-  '/': typeof AppIndexRoute
   '/login': typeof LoginRoute
   '/portal': typeof PortalRouteWithChildren
+  '/upgrade': typeof UpgradeRoute
   '/access': typeof AppAccessRoute
   '/campaigns': typeof AppCampaignsRoute
+  '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRoute
   '/forms': typeof AppFormsRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -390,7 +446,12 @@ export interface FileRoutesByFullPath {
   '/portal/register': typeof PortalRegisterRoute
   '/portal/shop': typeof PortalShopRoute
   '/portal/verify': typeof PortalVerifyRoute
+  '/production/home': typeof ProductionHomeRoute
+  '/production/sign-in': typeof ProductionSignInRoute
+  '/production/signin': typeof ProductionSigninRoute
+  '/production/user-portal': typeof ProductionUserPortalRoute
   '/portal/': typeof PortalIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
   '/orders/$orderId': typeof AppOrdersOrderIdRoute
   '/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
@@ -398,6 +459,8 @@ export interface FileRoutesByFullPath {
   '/api/agent/$': typeof ApiAgentSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/jobs/run': typeof ApiJobsRunRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/payments/alternative': typeof ApiPaymentsAlternativeRoute
   '/api/zendesk/webhook': typeof ApiZendeskWebhookRoute
   '/portal/orders/$orderId': typeof PortalOrdersOrderIdRoute
@@ -419,10 +482,13 @@ export interface FileRoutesByFullPath {
   '/store/$slug/': typeof StoreSlugIndexRoute
 }
 export interface FileRoutesByTo {
+  '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/login': typeof LoginRoute
+  '/upgrade': typeof UpgradeRoute
   '/access': typeof AppAccessRoute
   '/campaigns': typeof AppCampaignsRoute
+  '/dashboard': typeof AppDashboardRoute
   '/docs': typeof AppDocsRoute
   '/forms': typeof AppFormsRoute
   '/integrations': typeof AppIntegrationsRoute
@@ -447,8 +513,12 @@ export interface FileRoutesByTo {
   '/portal/register': typeof PortalRegisterRoute
   '/portal/shop': typeof PortalShopRoute
   '/portal/verify': typeof PortalVerifyRoute
-  '/': typeof AppIndexRoute
+  '/production/home': typeof ProductionHomeRoute
+  '/production/sign-in': typeof ProductionSignInRoute
+  '/production/signin': typeof ProductionSigninRoute
+  '/production/user-portal': typeof ProductionUserPortalRoute
   '/portal': typeof PortalIndexRoute
+  '/production': typeof ProductionIndexRoute
   '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
   '/orders/$orderId': typeof AppOrdersOrderIdRoute
   '/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
@@ -456,6 +526,8 @@ export interface FileRoutesByTo {
   '/api/agent/$': typeof ApiAgentSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/jobs/run': typeof ApiJobsRunRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/payments/alternative': typeof ApiPaymentsAlternativeRoute
   '/api/zendesk/webhook': typeof ApiZendeskWebhookRoute
   '/portal/orders/$orderId': typeof PortalOrdersOrderIdRoute
@@ -478,12 +550,15 @@ export interface FileRoutesByTo {
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
   '/$': typeof SplatRoute
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/portal': typeof PortalRouteWithChildren
+  '/upgrade': typeof UpgradeRoute
   '/_app/access': typeof AppAccessRoute
   '/_app/campaigns': typeof AppCampaignsRoute
+  '/_app/dashboard': typeof AppDashboardRoute
   '/_app/docs': typeof AppDocsRoute
   '/_app/forms': typeof AppFormsRoute
   '/_app/integrations': typeof AppIntegrationsRoute
@@ -508,8 +583,12 @@ export interface FileRoutesById {
   '/portal/register': typeof PortalRegisterRoute
   '/portal/shop': typeof PortalShopRoute
   '/portal/verify': typeof PortalVerifyRoute
-  '/_app/': typeof AppIndexRoute
+  '/production/home': typeof ProductionHomeRoute
+  '/production/sign-in': typeof ProductionSignInRoute
+  '/production/signin': typeof ProductionSigninRoute
+  '/production/user-portal': typeof ProductionUserPortalRoute
   '/portal/': typeof PortalIndexRoute
+  '/production/': typeof ProductionIndexRoute
   '/_app/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
   '/_app/orders/$orderId': typeof AppOrdersOrderIdRoute
   '/_app/organizations/$orgId': typeof AppOrganizationsOrgIdRoute
@@ -517,6 +596,8 @@ export interface FileRoutesById {
   '/api/agent/$': typeof ApiAgentSplatRoute
   '/api/auth/$': typeof ApiAuthSplatRoute
   '/api/jobs/run': typeof ApiJobsRunRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/payments/alternative': typeof ApiPaymentsAlternativeRoute
   '/api/zendesk/webhook': typeof ApiZendeskWebhookRoute
   '/portal/orders/$orderId': typeof PortalOrdersOrderIdRoute
@@ -540,12 +621,14 @@ export interface FileRoutesById {
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    | '/$'
     | '/'
+    | '/$'
     | '/login'
     | '/portal'
+    | '/upgrade'
     | '/access'
     | '/campaigns'
+    | '/dashboard'
     | '/docs'
     | '/forms'
     | '/integrations'
@@ -570,7 +653,12 @@ export interface FileRouteTypes {
     | '/portal/register'
     | '/portal/shop'
     | '/portal/verify'
+    | '/production/home'
+    | '/production/sign-in'
+    | '/production/signin'
+    | '/production/user-portal'
     | '/portal/'
+    | '/production/'
     | '/notifications/$notificationId'
     | '/orders/$orderId'
     | '/organizations/$orgId'
@@ -578,6 +666,8 @@ export interface FileRouteTypes {
     | '/api/agent/$'
     | '/api/auth/$'
     | '/api/jobs/run'
+    | '/api/oauth/authorize'
+    | '/api/oauth/token'
     | '/api/payments/alternative'
     | '/api/zendesk/webhook'
     | '/portal/orders/$orderId'
@@ -599,10 +689,13 @@ export interface FileRouteTypes {
     | '/store/$slug/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/'
     | '/$'
     | '/login'
+    | '/upgrade'
     | '/access'
     | '/campaigns'
+    | '/dashboard'
     | '/docs'
     | '/forms'
     | '/integrations'
@@ -627,8 +720,12 @@ export interface FileRouteTypes {
     | '/portal/register'
     | '/portal/shop'
     | '/portal/verify'
-    | '/'
+    | '/production/home'
+    | '/production/sign-in'
+    | '/production/signin'
+    | '/production/user-portal'
     | '/portal'
+    | '/production'
     | '/notifications/$notificationId'
     | '/orders/$orderId'
     | '/organizations/$orgId'
@@ -636,6 +733,8 @@ export interface FileRouteTypes {
     | '/api/agent/$'
     | '/api/auth/$'
     | '/api/jobs/run'
+    | '/api/oauth/authorize'
+    | '/api/oauth/token'
     | '/api/payments/alternative'
     | '/api/zendesk/webhook'
     | '/portal/orders/$orderId'
@@ -657,12 +756,15 @@ export interface FileRouteTypes {
     | '/store/$slug'
   id:
     | '__root__'
+    | '/'
     | '/$'
     | '/_app'
     | '/login'
     | '/portal'
+    | '/upgrade'
     | '/_app/access'
     | '/_app/campaigns'
+    | '/_app/dashboard'
     | '/_app/docs'
     | '/_app/forms'
     | '/_app/integrations'
@@ -687,8 +789,12 @@ export interface FileRouteTypes {
     | '/portal/register'
     | '/portal/shop'
     | '/portal/verify'
-    | '/_app/'
+    | '/production/home'
+    | '/production/sign-in'
+    | '/production/signin'
+    | '/production/user-portal'
     | '/portal/'
+    | '/production/'
     | '/_app/notifications/$notificationId'
     | '/_app/orders/$orderId'
     | '/_app/organizations/$orgId'
@@ -696,6 +802,8 @@ export interface FileRouteTypes {
     | '/api/agent/$'
     | '/api/auth/$'
     | '/api/jobs/run'
+    | '/api/oauth/authorize'
+    | '/api/oauth/token'
     | '/api/payments/alternative'
     | '/api/zendesk/webhook'
     | '/portal/orders/$orderId'
@@ -718,15 +826,24 @@ export interface FileRouteTypes {
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
+  IndexRoute: typeof IndexRoute
   SplatRoute: typeof SplatRoute
   AppRoute: typeof AppRouteWithChildren
   LoginRoute: typeof LoginRoute
   PortalRoute: typeof PortalRouteWithChildren
+  UpgradeRoute: typeof UpgradeRoute
   ApiOpenapiDotjsonRoute: typeof ApiOpenapiDotjsonRoute
   AuthPopupRoute: typeof AuthPopupRoute
+  ProductionHomeRoute: typeof ProductionHomeRoute
+  ProductionSignInRoute: typeof ProductionSignInRoute
+  ProductionSigninRoute: typeof ProductionSigninRoute
+  ProductionUserPortalRoute: typeof ProductionUserPortalRoute
+  ProductionIndexRoute: typeof ProductionIndexRoute
   ApiAgentSplatRoute: typeof ApiAgentSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
   ApiJobsRunRoute: typeof ApiJobsRunRoute
+  ApiOauthAuthorizeRoute: typeof ApiOauthAuthorizeRoute
+  ApiOauthTokenRoute: typeof ApiOauthTokenRoute
   ApiPaymentsAlternativeRoute: typeof ApiPaymentsAlternativeRoute
   ApiZendeskWebhookRoute: typeof ApiZendeskWebhookRoute
   StoreSlugSkuRoute: typeof StoreSlugSkuRoute
@@ -739,6 +856,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$': {
       id: '/$'
       path: '/$'
@@ -767,12 +891,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_app/': {
-      id: '/_app/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof AppIndexRouteImport
-      parentRoute: typeof AppRoute
+    '/upgrade': {
+      id: '/upgrade'
+      path: '/upgrade'
+      fullPath: '/upgrade'
+      preLoaderRoute: typeof UpgradeRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_app/access': {
       id: '/_app/access'
@@ -786,6 +910,13 @@ declare module '@tanstack/react-router' {
       path: '/campaigns'
       fullPath: '/campaigns'
       preLoaderRoute: typeof AppCampaignsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/dashboard': {
+      id: '/_app/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AppDashboardRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/docs': {
@@ -963,6 +1094,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalVerifyRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/production/': {
+      id: '/production/'
+      path: '/production'
+      fullPath: '/production/'
+      preLoaderRoute: typeof ProductionIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/home': {
+      id: '/production/home'
+      path: '/production/home'
+      fullPath: '/production/home'
+      preLoaderRoute: typeof ProductionHomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/sign-in': {
+      id: '/production/sign-in'
+      path: '/production/sign-in'
+      fullPath: '/production/sign-in'
+      preLoaderRoute: typeof ProductionSignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/signin': {
+      id: '/production/signin'
+      path: '/production/signin'
+      fullPath: '/production/signin'
+      preLoaderRoute: typeof ProductionSigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/production/user-portal': {
+      id: '/production/user-portal'
+      path: '/production/user-portal'
+      fullPath: '/production/user-portal'
+      preLoaderRoute: typeof ProductionUserPortalRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_app/notifications/': {
       id: '/_app/notifications/'
       path: '/notifications'
@@ -1038,6 +1204,20 @@ declare module '@tanstack/react-router' {
       path: '/api/jobs/run'
       fullPath: '/api/jobs/run'
       preLoaderRoute: typeof ApiJobsRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/authorize': {
+      id: '/api/oauth/authorize'
+      path: '/api/oauth/authorize'
+      fullPath: '/api/oauth/authorize'
+      preLoaderRoute: typeof ApiOauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/token': {
+      id: '/api/oauth/token'
+      path: '/api/oauth/token'
+      fullPath: '/api/oauth/token'
+      preLoaderRoute: typeof ApiOauthTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/payments/alternative': {
@@ -1151,6 +1331,7 @@ declare module '@tanstack/react-router' {
 interface AppRouteChildren {
   AppAccessRoute: typeof AppAccessRoute
   AppCampaignsRoute: typeof AppCampaignsRoute
+  AppDashboardRoute: typeof AppDashboardRoute
   AppDocsRoute: typeof AppDocsRoute
   AppFormsRoute: typeof AppFormsRoute
   AppIntegrationsRoute: typeof AppIntegrationsRoute
@@ -1160,7 +1341,6 @@ interface AppRouteChildren {
   AppServicesRoute: typeof AppServicesRoute
   AppSettingsRoute: typeof AppSettingsRoute
   AppUsersRoute: typeof AppUsersRoute
-  AppIndexRoute: typeof AppIndexRoute
   AppNotificationsNotificationIdRoute: typeof AppNotificationsNotificationIdRoute
   AppOrdersOrderIdRoute: typeof AppOrdersOrderIdRoute
   AppOrganizationsOrgIdRoute: typeof AppOrganizationsOrgIdRoute
@@ -1174,6 +1354,7 @@ interface AppRouteChildren {
 const AppRouteChildren: AppRouteChildren = {
   AppAccessRoute: AppAccessRoute,
   AppCampaignsRoute: AppCampaignsRoute,
+  AppDashboardRoute: AppDashboardRoute,
   AppDocsRoute: AppDocsRoute,
   AppFormsRoute: AppFormsRoute,
   AppIntegrationsRoute: AppIntegrationsRoute,
@@ -1183,7 +1364,6 @@ const AppRouteChildren: AppRouteChildren = {
   AppServicesRoute: AppServicesRoute,
   AppSettingsRoute: AppSettingsRoute,
   AppUsersRoute: AppUsersRoute,
-  AppIndexRoute: AppIndexRoute,
   AppNotificationsNotificationIdRoute: AppNotificationsNotificationIdRoute,
   AppOrdersOrderIdRoute: AppOrdersOrderIdRoute,
   AppOrganizationsOrgIdRoute: AppOrganizationsOrgIdRoute,
@@ -1248,15 +1428,24 @@ const PortalRouteWithChildren =
   PortalRoute._addFileChildren(PortalRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
   AppRoute: AppRouteWithChildren,
   LoginRoute: LoginRoute,
   PortalRoute: PortalRouteWithChildren,
+  UpgradeRoute: UpgradeRoute,
   ApiOpenapiDotjsonRoute: ApiOpenapiDotjsonRoute,
   AuthPopupRoute: AuthPopupRoute,
+  ProductionHomeRoute: ProductionHomeRoute,
+  ProductionSignInRoute: ProductionSignInRoute,
+  ProductionSigninRoute: ProductionSigninRoute,
+  ProductionUserPortalRoute: ProductionUserPortalRoute,
+  ProductionIndexRoute: ProductionIndexRoute,
   ApiAgentSplatRoute: ApiAgentSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,
   ApiJobsRunRoute: ApiJobsRunRoute,
+  ApiOauthAuthorizeRoute: ApiOauthAuthorizeRoute,
+  ApiOauthTokenRoute: ApiOauthTokenRoute,
   ApiPaymentsAlternativeRoute: ApiPaymentsAlternativeRoute,
   ApiZendeskWebhookRoute: ApiZendeskWebhookRoute,
   StoreSlugSkuRoute: StoreSlugSkuRoute,

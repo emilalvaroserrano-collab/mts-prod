@@ -29,6 +29,7 @@
  * components read the user via `@/lib/auth/use-current-user`; server functions get
  * a verified id via `@/lib/auth/middleware`.
  */
+import { APIError } from "better-auth/api";
 import { betterAuth } from "better-auth";
 import { bearer, genericOAuth } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
@@ -47,6 +48,7 @@ import {
   PREVIEW_CLIENT_ID,
   PREVIEW_CLIENT_SECRET,
 } from "./preview";
+import { findZendeskInvite } from "./zendesk-invite";
 import { PUBLIC_APP_HOST, PUBLIC_APP_ORIGIN } from "./public-origin";
 
 // Kick (and share) PGLite bootstrap as soon as the auth server module loads.
@@ -190,9 +192,47 @@ const auth0OAuthConfig = auth0Ready
     ]
   : [];
 
+const zendeskSubdomain = env("ZENDESK_SUBDOMAIN");
+const zendeskClientId = env("ZENDESK_OAUTH_CLIENT_ID");
+const zendeskClientSecret = env("ZENDESK_OAUTH_CLIENT_SECRET");
+const zendeskReady = Boolean(zendeskSubdomain && zendeskClientId && zendeskClientSecret);
+
+const zendeskOAuthConfig = zendeskReady
+  ? [
+      {
+        providerId: "zendesk",
+        clientId: zendeskClientId as string,
+        clientSecret: zendeskClientSecret as string,
+        authorizationUrl: `https://${zendeskSubdomain}.zendesk.com/oauth/authorizations/new`,
+        tokenUrl: `https://${zendeskSubdomain}.zendesk.com/oauth/tokens`,
+        scopes: ["read"],
+        authentication: "post" as const,
+        overrideUserInfo: true,
+        getUserInfo: async (tokens: { accessToken?: string }) => {
+          if (!tokens.accessToken || !zendeskSubdomain) return null;
+          const response = await fetch(`https://${zendeskSubdomain}.zendesk.com/api/v2/users/me.json`, {
+            headers: { Authorization: `Bearer ${tokens.accessToken}`, Accept: "application/json" },
+          });
+          if (!response.ok) return null;
+          const body = (await response.json()) as {
+            user?: { id?: number | string; name?: string; email?: string; active?: boolean; suspended?: boolean };
+          };
+          const user = body.user;
+          if (!user?.id || !user.email || user.suspended || user.active === false) return null;
+          return {
+            id: String(user.id),
+            name: user.name || user.email,
+            email: user.email,
+            emailVerified: true,
+          };
+        },
+      },
+    ]
+  : [];
+
 const oauthPlugin =
-  grokOAuthConfigs.length || auth0OAuthConfig.length
-    ? genericOAuth({ config: [...grokOAuthConfigs, ...auth0OAuthConfig] })
+  grokOAuthConfigs.length || auth0OAuthConfig.length || zendeskOAuthConfig.length
+    ? genericOAuth({ config: [...zendeskOAuthConfig, ...grokOAuthConfigs, ...auth0OAuthConfig] })
     : null;
 
 export const auth = betterAuth({
@@ -220,6 +260,7 @@ export const auth = betterAuth({
       trustedProviders: [
         ...GROK_PROVIDERS.map((p) => p.providerId),
         "auth0",
+        "zendesk",
         GATE_PROVIDER_ID,
       ],
       // X's synthetic email is never "verified", so don't gate linking on the
@@ -240,6 +281,19 @@ export const auth = betterAuth({
 
   // Local email/password — toggled only via `./email-password` (not a plugin).
   ...(emailAndPasswordEnabled ? { emailAndPassword: { enabled: true } } : {}),
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (user: { email?: string | null }) => {
+          const email = user.email?.trim().toLowerCase() || "";
+          const invited = email ? await findZendeskInvite(email).catch(() => null) : null;
+          if (!invited) {
+            throw new APIError("FORBIDDEN", { message: "This email is not invited." });
+          }
+        },
+      },
+    },
+  },
 
   // `__Host-` prefixed cookies: the browser REFUSES any same-named cookie that
   // carries a `Domain` attribute, so a sibling `*.grok.me` app cannot "toss" a

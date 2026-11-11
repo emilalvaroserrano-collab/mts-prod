@@ -33,7 +33,7 @@ import { ticketSearch } from "@/lib/portal/ticket-search";
 import { Boot, Input } from "./ui";
 
 const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true, group: "Work" },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, exact: true, group: "Work" },
   { to: "/notifications", label: "Notifications", icon: Bell, group: "Work" },
   { to: "/tickets", label: "Tickets", icon: Ticket, group: "Work" },
   { to: "/orders", label: "Orders", icon: ClipboardList, group: "Work" },
@@ -52,7 +52,7 @@ const NAV = [
 ] as const;
 
 const GROUPS = ["Work", "Directory", "Commerce", "Setup"] as const;
-const MOBILE_TABS = ["/", "/tickets", "/orders", "/products"] as const;
+const MOBILE_TABS = ["/dashboard", "/tickets", "/orders", "/products"] as const;
 
 const NAV_COUNTS: Partial<Record<(typeof NAV)[number]["to"], (info: ShellInfo) => number>> = {
   "/tickets": (info) => info.ticketCount,
@@ -219,7 +219,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={collapsed ? "min-h-screen bg-bg text-ink md:grid md:grid-cols-[4.5rem_minmax(0,1fr)]" : "min-h-screen bg-bg text-ink md:grid md:grid-cols-[16.5rem_minmax(0,1fr)]"}>
+    <div className={collapsed ? "min-h-screen text-ink md:grid md:grid-cols-[4.5rem_minmax(0,1fr)]" : "min-h-screen text-ink md:grid md:grid-cols-[16.5rem_minmax(0,1fr)]"}>
       <aside className="hidden border-r border-line md:sticky md:top-0 md:block md:h-screen"><Nav compact={collapsed} /></aside>
       {more ? (
         <div className="fixed inset-0 z-40 md:hidden">

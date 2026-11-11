@@ -45,7 +45,7 @@ function StoreServices() {
         <h1 className="text-2xl font-semibold tracking-tight">MTS Services</h1>
         <p className="text-sm text-muted">Managed IT, cloud, projects, phone, and internet. Requesting one opens a ticket.</p>
         {!token ? (
-          <Link to="/login" className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">Sign in to request a service</Link>
+          <Link to="/upgrade" className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">Sign in to request a service</Link>
         ) : null}
         {[...groups.entries()].map(([category, items]) => (
           <section key={category} className="grid gap-2">

@@ -1,8 +1,9 @@
 import { getSql, type Sql } from "@/lib/db";
 import { authorizeAgentKey } from "@/lib/portal/agent-keys";
 import { ALTERNATIVE_PORTAL, createAlternativeCheckout, loadAlternativeCreds } from "@/lib/portal/alternative";
-import { filePortalTicket, settleNewOrder, syncCustomerTicket } from "@/lib/portal/api";
+import { ensureDeskOrganization, filePortalTicket, settleNewOrder, syncCustomerTicket } from "@/lib/portal/api";
 import { resolveMail, setInventory } from "@/lib/portal/commerce";
+import { authorizeOauthToken } from "@/lib/portal/mts-oauth";
 import { unpaidCardStatus, verificationDecision } from "@/lib/portal/security";
 
 type Row = Record<string, unknown>;
@@ -169,7 +170,7 @@ export async function handleAgentRequest(request: Request) {
   if (parts[0] === "handoff" && parts[1] === "redeem" && request.method === "POST") {
     return redeemHandoff(request);
   }
-  const auth = await authorizeAgentKey(request.headers.get("authorization") || "");
+  const auth = (await authorizeAgentKey(request.headers.get("authorization") || "")) || (await authorizeOauthToken(request.headers.get("authorization") || ""));
   if (!auth) return json({ error: "Unauthorized. Send Authorization: Bearer with an mts_ key from /docs." }, 401);
   const sql = auth.sql;
   try {
@@ -568,9 +569,7 @@ export async function handleAgentRequest(request: Request) {
       const subtotal = items.reduce((sum, item, index) => sum + n(products[index], "price_cents") * item.quantity, 0);
       const shippingCents = body.shippingMethod === "express" ? 2500 : subtotal >= 50000 ? 0 : 1500;
       const shippingMethod = body.shippingMethod === "express" ? "express" : "standard";
-      const shops = await sql<Row>`select id from organizations where domain = 'shop.managetech.example' limit 1`;
-      const organizationId = orgId || (shops[0] ? n(shops[0], "id") : null);
-      if (!organizationId) return json({ error: "The shop is not ready to take orders." }, 400);
+      const organizationId = orgId || (await ensureDeskOrganization(sql));
       const inserted = await sql<Row>`
         insert into orders (
           organization_id, customer_user_id, shop_customer_id, status, notes, approval_note, payment_method,

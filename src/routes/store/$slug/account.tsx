@@ -67,8 +67,8 @@ function Account() {
   if (!token || account.data === null) {
     return (
       <main className="mx-auto grid max-w-md gap-4 px-4 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight">{mode === "up" ? "Create account" : "Sign in"}</h1>
-        <p className="text-sm text-muted">See your orders and where each shipment is.</p>
+        <h1 className="text-2xl font-semibold tracking-tight">Sign in</h1>
+        <p className="text-sm text-muted">This portal is invite only. MTS adds your email in Zendesk, then you sign in with that same email.</p>
         <form
           className="grid gap-3"
           onSubmit={(event) => {
@@ -91,8 +91,8 @@ function Account() {
           {error ? <p className="text-sm text-bad">{error}</p> : null}
           <Button type="submit" disabled={auth.isPending}>{auth.isPending ? "Working" : mode === "up" ? "Create account" : "Sign in"}</Button>
         </form>
-        <button type="button" className="text-left text-sm text-muted underline-offset-2 hover:underline" onClick={() => setMode(mode === "in" ? "up" : "in")}>
-          {mode === "in" ? "Need an account? Create one" : "Already have an account? Sign in"}
+        <button type="button" className="text-left text-sm text-muted">
+          New accounts are created in Zendesk, then they can sign in here.
         </button>
       </main>
     );

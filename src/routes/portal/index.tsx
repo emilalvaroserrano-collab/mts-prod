@@ -4,6 +4,7 @@ import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { getShopAccount, getStorefront, listPortalServices } from "@/lib/portal/api";
 import { money } from "@/lib/portal/format";
 import { useShopToken } from "@/lib/portal/shop-session";
+import { DataField, PortalPanel, StatTile } from "@/components/portal-ui";
 
 export const Route = createFileRoute("/portal/")({
   component: PortalHome,
@@ -35,19 +36,33 @@ function PortalHome() {
   const hello = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const first = customer.name.split(" ")[0] || "there";
 
+  const place = [customer.city, customer.region].filter(Boolean).join(", ");
+
   return (
     <div className="grid w-full gap-4">
       <section className="grid gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{hello}, {first}.</h1>
+        <h1 className="text-2xl font-medium tracking-tight">{hello}, {first}.</h1>
         <p className="text-sm text-muted">Welcome to the MTS User Portal{session.data.organization || session.data.business ? ` · ${session.data.organization || session.data.business}` : ""}.</p>
       </section>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <Stat label="Open tickets" value={open} />
-        <Stat label="Active services" value={activeServices} />
-        <Stat label="Pending orders" value={pendingOrders} />
-        <Stat label="Open requests" value={pendingRequests} />
-        <Stat label="Unpaid" value={unpaid} />
+        <StatTile label="Open tickets" value={open} />
+        <StatTile label="Active services" value={activeServices} />
+        <StatTile label="Pending orders" value={pendingOrders} />
+        <StatTile label="Open requests" value={pendingRequests} />
+        <StatTile label="Unpaid" value={unpaid} />
       </div>
+      <PortalPanel title="Your details">
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <DataField label="Email" value={customer.email} />
+          <DataField label="Phone" value={customer.phone} />
+          <DataField label="Company" value={session.data.organization || session.data.business} />
+          <DataField label="Role" value={session.data.access.roleLabel} />
+          <DataField label="Location" value={place} />
+          <DataField label="Country" value={customer.country} />
+          <DataField label="Billing" value={customer.payLater ? "Order now, pay later" : "Pay at checkout"} />
+          <DataField label="Account" value={session.data.verified ? "Verified" : "Pending verification"} />
+        </div>
+      </PortalPanel>
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         <Link to="/portal/tickets" className="rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold">Create support ticket</Link>
         <Link to="/portal/shop" className="rounded-xl border border-line bg-surface px-4 py-3 text-sm font-semibold">Order equipment or a service</Link>
@@ -60,10 +75,12 @@ function PortalHome() {
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {(shop.data?.products ?? []).slice(0, 4).map((product) => (
-            <a key={product.id} href={`/store/${shop.data?.slug || "manage-tech-service"}/${product.sku}`} className="overflow-hidden rounded-xl border border-line bg-surface">
-              {product.imageUrl ? <img src={product.imageUrl} alt="" className="aspect-square w-full bg-surface-2 object-contain" /> : <div className="aspect-square bg-surface-2" />}
+            <a key={product.id} href={`/store/${shop.data?.slug || "manage-tech-service"}/${product.sku}`} className="shop-card group grid overflow-hidden rounded-2xl border border-white/80 bg-surface/95 shadow-[0_12px_32px_rgba(0,57,112,0.06)]">
+              <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-b from-white to-surface-2">
+                {product.imageUrl ? <img src={product.imageUrl} alt="" className="max-h-[86%] max-w-[86%] object-contain object-center" /> : <div className="size-12 rounded-2xl bg-white/70" />}
+              </div>
               <div className="grid gap-1 p-3">
-                <p className="truncate text-sm font-semibold">{product.name}</p>
+                <p className="truncate text-sm font-medium">{product.name}</p>
                 <p className="text-sm text-muted">{money(product.priceCents)}</p>
               </div>
             </a>
@@ -96,14 +113,5 @@ function PortalHome() {
         </section>
       </div>
     </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <article className="rounded-xl border border-line bg-surface px-4 py-3">
-      <p className="text-xs text-muted">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tabular-nums">{value}</p>
-    </article>
   );
 }

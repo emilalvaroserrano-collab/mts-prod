@@ -253,28 +253,23 @@ function PeoplePage() {
           <table className="w-full min-w-[56rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Person</th>
-                <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-4 py-3 font-medium">Access</th>
-                <th className="px-4 py-3 font-medium">Orders</th>
-                <th className="px-4 py-3 font-medium">Ticket</th>
-                <th className="px-4 py-3 font-medium">Joined</th>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Email</th>
+                <th className="px-4 py-3 font-medium">Organization</th>
+                <th className="px-4 py-3 font-medium">Role</th>
+                <th className="px-4 py-3 font-medium">Phone</th>
+                <th className="px-4 py-3 font-medium">External ID</th>
+                <th className="px-4 py-3 font-medium">Created</th>
                 <th className="px-4 py-3 font-medium" />
               </tr>
             </thead>
             <tbody>
               {people.map((person) => (
                 <tr key={`${person.source}-${person.staffUserId || person.id}`} className="border-t border-line">
-                  <td className="px-4 py-3">
-                    <p className="font-medium">{person.name || person.email}</p>
-                    <p className="text-xs text-muted">{person.email}</p>
-                    {person.phone ? <p className="text-xs text-muted">{person.phone}</p> : null}
-                  </td>
-                  <td className="px-4 py-3" data-label="Company">
-                    <p>{person.source === "shop" ? "Online shop" : person.source === "portal" ? person.organizationName || "Portal" : person.organizationName || "No company"}</p>
-                    <p className="text-xs text-muted">{person.source === "company" ? person.title || "—" : person.title}</p>
-                  </td>
-                  <td className="px-4 py-3" data-label="Access">
+                  <td className="px-4 py-3 font-medium" data-label="Name">{person.name || "—"}</td>
+                  <td className="px-4 py-3" data-label="Email">{person.email || "—"}</td>
+                  <td className="px-4 py-3" data-label="Organization">{person.source === "shop" ? "Online shop" : person.organizationName || "—"}</td>
+                  <td className="px-4 py-3" data-label="Role">
                     <div className="flex flex-wrap justify-end gap-1 sm:justify-start">
                       {person.source === "shop" ? (
                         <select
@@ -283,36 +278,23 @@ function PeoplePage() {
                           value={["regular", "buyer", "authorized"].includes(person.permissionLevel) ? person.permissionLevel : "regular"}
                           onChange={(event) => role.mutate({ id: person.id, roleId: event.target.value })}
                         >
-                          <option value="regular">Customer</option>
-                          <option value="buyer">Shop</option>
-                          <option value="authorized">Account</option>
+                          <option value="regular">end-user</option>
+                          <option value="buyer">end-user · shop</option>
+                          <option value="authorized">end-user · account</option>
                         </select>
-                      ) : <Badge tone={person.permissionLevel === "authorized" ? "pine" : "neutral"}>{person.permissionLevel}</Badge>}
+                      ) : <Badge tone={person.permissionLevel === "authorized" ? "pine" : "neutral"}>{person.source === "portal" ? "agent" : "end-user"}</Badge>}
                       <StatusBadge value={person.active ? "active" : "inactive"} />
-                      {person.canOrder ? <Badge tone="good">Orders</Badge> : null}
-                      {person.canApproveOrders ? <Badge tone="warn">Approves</Badge> : null}
                     </div>
                   </td>
-                  <td className="px-4 py-3" data-label="Orders">
-                    {person.lastOrderId ? (
-                      <Link to="/orders/$orderId" params={{ orderId: String(person.lastOrderId) }} className="font-medium hover:underline">
-                        MT-{1000 + person.lastOrderId}
-                      </Link>
-                    ) : (
-                      <span className="text-muted">—</span>
-                    )}
-                    <p className="text-xs text-muted">{person.orderCount} {person.orderCount === 1 ? "order" : "orders"}{person.lastOrderStatus ? ` · ${person.lastOrderStatus}` : ""}</p>
-                  </td>
-                  <td className="px-4 py-3" data-label="Ticket">
-                    {person.ticketId ? (
+                  <td className="px-4 py-3" data-label="Phone">{person.phone || "—"}</td>
+                  <td className="px-4 py-3" data-label="External ID">
+                    {person.zendeskUserId ? person.zendeskUserId : person.ticketId ? (
                       <Link to="/tickets/$ticketId" params={{ ticketId: String(person.ticketId) }} className="text-accent hover:underline">
                         {person.zendeskTicketId ? `#${person.zendeskTicketId}` : `P-${person.ticketId}`}
                       </Link>
-                    ) : (
-                      <span className="text-muted">{person.zendeskUserId ? `User ${person.zendeskUserId}` : "Not synced"}</span>
-                    )}
+                    ) : "—"}
                   </td>
-                  <td className="px-4 py-3 text-muted" data-label="Joined">{person.createdAt ? day(person.createdAt) : "—"}</td>
+                  <td className="px-4 py-3 text-muted" data-label="Created">{person.createdAt ? day(person.createdAt) : "—"}</td>
                   <td className="px-4 py-3 text-right" data-label="Action">
                     {person.source === "shop" ? (
                       <Button size="sm" variant="secondary" onClick={() => addShopPerson(person)}>Add to company</Button>

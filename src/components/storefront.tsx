@@ -50,7 +50,7 @@ export function StoreFrame({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="grid min-h-dvh max-w-full grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-x-auto bg-[#f7fafb] text-ink">
+    <div className="grid min-h-dvh max-w-full grid-rows-[auto_auto_minmax(0,1fr)_auto] overflow-x-auto text-ink">
       <div className="bg-ink px-4 py-2.5 text-center text-[12px] text-white/85">
         {store.tagline || "Free standard shipping on orders over $500."}
       </div>

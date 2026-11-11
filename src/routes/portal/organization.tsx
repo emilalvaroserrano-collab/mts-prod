@@ -4,6 +4,8 @@ import { useState } from "react";
 import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { savePortalCompany } from "@/lib/portal/api";
 import { useShopToken } from "@/lib/portal/shop-session";
+import { DataField, PortalPanel } from "@/components/portal-ui";
+import { Field, Input } from "@/components/ui";
 
 export const Route = createFileRoute("/portal/organization")({
   component: OrganizationPage,
@@ -26,14 +28,28 @@ function OrganizationPage() {
     onError: (error) => setNotice(error instanceof Error ? error.message : "Could not save."),
   });
   return (
-    <form className="grid w-full gap-3" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
-      <h1 className="text-2xl font-semibold tracking-tight">My organization</h1>
-      <p className="text-sm text-muted">You only see this company. Saving a change opens a ticket for review.</p>
-      <input value={business} onChange={(event) => setBusiness(event.target.value)} required placeholder="Company name" aria-label="Company name" className="h-11 rounded-xl border border-line bg-surface px-3" />
-      <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="Phone" aria-label="Phone" className="h-11 rounded-xl border border-line bg-surface px-3" />
-      <input value={city} onChange={(event) => setCity(event.target.value)} placeholder="City" aria-label="City" className="h-11 rounded-xl border border-line bg-surface px-3" />
+    <form className="grid w-full gap-4" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
+      <div className="grid gap-1">
+        <h1 className="text-2xl font-medium tracking-tight">My organization</h1>
+        <p className="text-sm text-muted">You only see this company. Saving a change opens a ticket for review.</p>
+      </div>
+      <PortalPanel>
+        <div className="grid grid-cols-2 gap-3">
+          <DataField label="Signed in as" value={session.data?.customer.email} />
+          <DataField label="Role" value={session.data?.access.roleLabel} />
+        </div>
+      </PortalPanel>
+      <PortalPanel title="Company">
+        <div className="grid gap-3">
+          <Field label="Company name"><Input value={business} onChange={(event) => setBusiness(event.target.value)} required className="h-11 rounded-xl" /></Field>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Phone"><Input value={phone} onChange={(event) => setPhone(event.target.value)} className="h-11 rounded-xl" /></Field>
+            <Field label="City"><Input value={city} onChange={(event) => setCity(event.target.value)} className="h-11 rounded-xl" /></Field>
+          </div>
+        </div>
+      </PortalPanel>
       {notice ? <p className="text-sm text-muted">{notice}</p> : null}
-      <button type="submit" disabled={save.isPending} className="h-11 rounded-xl bg-ink text-sm font-semibold text-white disabled:opacity-50">Save company</button>
+      <button type="submit" disabled={save.isPending} className="h-11 rounded-xl bg-ink text-sm font-medium text-white disabled:opacity-50">Save company</button>
     </form>
   );
 }

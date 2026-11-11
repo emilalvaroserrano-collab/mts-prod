@@ -62,16 +62,19 @@ function CompanyPage() {
             <Field label="Name">
               <Input value={form.name} onChange={(event) => patch({ name: event.target.value })} />
             </Field>
-            <Field label="Domain">
+            <Field label="Domain names">
               <Input value={form.domain} onChange={(event) => patch({ domain: event.target.value })} />
             </Field>
-            <Field label="Industry">
-              <Input value={form.industry} onChange={(event) => patch({ industry: event.target.value })} />
+            <Field label="Details">
+              <Input value={form.details || form.industry} onChange={(event) => patch({ details: event.target.value, industry: event.target.value })} />
+            </Field>
+            <Field label="Tags">
+              <Input value={form.tags} onChange={(event) => patch({ tags: event.target.value })} placeholder="vip, portal" />
             </Field>
             <Field label="Phone">
               <Input value={form.phone} onChange={(event) => patch({ phone: event.target.value })} />
             </Field>
-            <Field label="Zendesk organization id">
+            <Field label="External ID">
               <Input value={form.zendeskOrgId} onChange={(event) => patch({ zendeskOrgId: event.target.value })} />
             </Field>
             <Field label="Address">

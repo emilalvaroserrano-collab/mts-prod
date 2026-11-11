@@ -24,7 +24,7 @@ function PortalLayout() {
     if (link.data?.token) setShopToken(link.data.token);
   }, [link.data?.token]);
   if (isPending || (user && (link.isPending || link.data?.token !== token))) return <Boot />;
-  if (!user) return <Navigate to="/login" />;
+  if (!user) return <Navigate to="/upgrade" />;
   if (path === "/portal/call") return <Outlet />;
   return (
     <PortalShell>

@@ -22,6 +22,11 @@ function IntegrationPage() {
   const [oauthClientSecret, setOauthClientSecret] = useState("");
   const [oauthScopes, setOauthScopes] = useState("read write");
   const [clearOauth, setClearOauth] = useState(false);
+  const [conversationsAppId, setConversationsAppId] = useState("");
+  const [conversationsKeyId, setConversationsKeyId] = useState("");
+  const [conversationsSecret, setConversationsSecret] = useState("");
+  const [webhookId, setWebhookId] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
 
   useEffect(() => {
     if (!query.data) return;
@@ -33,6 +38,11 @@ function IntegrationPage() {
     setOauthClientSecret("");
     setOauthScopes("read write");
     setClearOauth(false);
+    setConversationsAppId(query.data.conversationsAppId);
+    setConversationsKeyId(query.data.conversationsKeyId);
+    setConversationsSecret("");
+    setWebhookId(query.data.webhookId);
+    setWebhookSecret("");
   }, [query.data]);
 
   function refresh() {
@@ -41,7 +51,7 @@ function IntegrationPage() {
   }
 
   const save = useMutation({
-    mutationFn: () => saveIntegration({ data: { subdomain, email, apiToken, clearToken, oauthClientId, oauthClientSecret, oauthScopes, clearOauth } }),
+    mutationFn: () => saveIntegration({ data: { subdomain, email, apiToken, clearToken, oauthClientId, oauthClientSecret, oauthScopes, clearOauth, conversationsAppId, conversationsKeyId, conversationsSecret, webhookId, webhookSecret } }),
     onSuccess: () => {
       toast.success("Zendesk settings saved");
       setApiToken("");
@@ -90,7 +100,7 @@ function IntegrationPage() {
       <PageHeader
         eyebrow="Connection"
         title="Zendesk"
-        description="shop.zendesk.com is connected with the Conversations API. Ticket import uses OAuth client credentials when that client id and secret are set."
+        description="One mts-portal Zendesk account for every customer and staff member. Tickets, people, and companies use this connection. It is not tied to the person who is signed in."
       />
       <Panel>
         <div className="grid gap-2">
@@ -118,7 +128,7 @@ function IntegrationPage() {
             }}
           >
             <Field label="Subdomain" hint={locked ? "Taken from ZENDESK_SUBDOMAIN." : "The part before .zendesk.com"}>
-              <Input value={subdomain} onChange={(event) => setSubdomain(event.target.value)} placeholder="shop" autoComplete="off" readOnly={locked} />
+              <Input value={subdomain} onChange={(event) => setSubdomain(event.target.value)} placeholder="mts-portal" autoComplete="off" readOnly={locked} />
             </Field>
             <Field label="Agent email" hint={locked ? "Taken from ZENDESK_EMAIL." : undefined}>
               <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="off" readOnly={locked} />
@@ -143,8 +153,8 @@ function IntegrationPage() {
               />
             </Field>
             {locked ? null : <Toggle checked={clearToken} onCheckedChange={setClearToken} label="Remove the stored token" />}
-            <Field label="OAuth client id" hint={data.oauthFromEnv ? "Taken from ZENDESK_OAUTH_CLIENT_ID." : "The identifier of the shop client-credentials client."}>
-              <Input value={oauthClientId} onChange={(event) => setOauthClientId(event.target.value)} autoComplete="off" readOnly={data.oauthFromEnv} placeholder="shop" />
+            <Field label="OAuth client id" hint={data.oauthFromEnv ? "Taken from ZENDESK_OAUTH_CLIENT_ID." : "Unique identifier of the mtsportal client."}>
+              <Input value={oauthClientId} onChange={(event) => setOauthClientId(event.target.value)} autoComplete="off" readOnly={data.oauthFromEnv} placeholder="mtsportal" />
             </Field>
             <Field label="OAuth client secret" hint={data.oauthSecretSet ? "A secret is stored. Leave this blank to keep it." : "Shown once in Zendesk. It stays on the server."}>
               <Input type="password" value={oauthClientSecret} onChange={(event) => setOauthClientSecret(event.target.value)} autoComplete="new-password" readOnly={data.oauthFromEnv} placeholder={data.oauthSecretSet ? "••••••••" : ""} />
@@ -153,12 +163,25 @@ function IntegrationPage() {
               <Input value={oauthScopes} onChange={(event) => setOauthScopes(event.target.value)} readOnly={data.oauthFromEnv} />
             </Field>
             {data.oauthFromEnv ? null : <Toggle checked={clearOauth} onCheckedChange={setClearOauth} label="Remove the stored OAuth secret" />}
+            <Field label="Conversations app id" hint="Sunshine Conversations app id for shop.">
+              <Input value={conversationsAppId} onChange={(event) => setConversationsAppId(event.target.value)} autoComplete="off" className="font-mono" />
+            </Field>
+            <Field label="Conversations key id">
+              <Input value={conversationsKeyId} onChange={(event) => setConversationsKeyId(event.target.value)} autoComplete="off" className="font-mono" />
+            </Field>
+            <Field label="Conversations secret" hint={data.conversationsSecretSet ? "A secret is stored in this portal. Leave this blank to keep it." : "Shown once in Zendesk. It stays on the server."}>
+              <Input type="password" value={conversationsSecret} onChange={(event) => setConversationsSecret(event.target.value)} autoComplete="new-password" placeholder={data.conversationsSecretSet ? "••••••••" : ""} />
+            </Field>
+            <Field label="Webhook id">
+              <Input value={webhookId} onChange={(event) => setWebhookId(event.target.value)} autoComplete="off" className="font-mono" />
+            </Field>
+            <Field label="Webhook shared secret" hint={data.webhookReady ? "A signing secret is stored. Leave this blank to keep it." : "Used to verify POST /api/zendesk/webhook."}>
+              <Input type="password" value={webhookSecret} onChange={(event) => setWebhookSecret(event.target.value)} autoComplete="new-password" placeholder={data.webhookReady ? "••••••••" : ""} />
+            </Field>
             <div className="flex flex-wrap gap-2">
-              {locked && data.oauthFromEnv ? null : (
-                <Button type="submit" disabled={save.isPending}>
-                  {save.isPending ? "Saving" : "Save connection"}
-                </Button>
-              )}
+              <Button type="submit" disabled={save.isPending}>
+                {save.isPending ? "Saving" : "Save connection"}
+              </Button>
               <Button type="button" variant="secondary" disabled={test.isPending} onClick={() => test.mutate()}>
                 {test.isPending ? "Checking" : "Test access"}
               </Button>
@@ -173,6 +196,19 @@ function IntegrationPage() {
         </Panel>
         <div className="grid content-start gap-4">
           <Panel>
+            <h2 className="text-sm font-semibold">mts-auth</h2>
+            <p className="mt-1 text-sm text-muted">Authorization code client for the Zendesk connection. Paste these into Zendesk. Do not leave the authorize or token URL on the site root.</p>
+            <dl className="mt-3 grid gap-2 text-sm">
+              <div><dt className="text-xs text-muted">Name</dt><dd className="font-medium">{data.mtsAuth.name}</dd></div>
+              <div><dt className="text-xs text-muted">Grant type</dt><dd>Authorization code</dd></div>
+              <div><dt className="text-xs text-muted">Client ID</dt><dd className="font-mono">{data.mtsAuth.clientId}</dd></div>
+              <div><dt className="text-xs text-muted">Client secret</dt><dd className="break-all font-mono text-xs">{data.mtsAuth.secret}</dd></div>
+              <div><dt className="text-xs text-muted">Authorize URL</dt><dd className="break-all font-mono text-xs">{data.mtsAuth.authorizeUrl}</dd></div>
+              <div><dt className="text-xs text-muted">Token URL</dt><dd className="break-all font-mono text-xs">{data.mtsAuth.tokenUrl}</dd></div>
+              <div><dt className="text-xs text-muted">Scopes</dt><dd>{data.mtsAuth.scopes}</dd></div>
+            </dl>
+          </Panel>
+          <Panel>
             <h2 className="text-sm font-semibold">Status</h2>
             <div className="mt-3">
               <Badge tone={tone}>{data.lastStatus || "not connected"}</Badge>
@@ -184,10 +220,10 @@ function IntegrationPage() {
             <div className="mt-4 border-t border-line pt-3 text-sm">
               <p className="font-medium">OAuth client</p>
               <p className="mt-1 text-muted">
-                {data.oauthReady ? `Client credentials · ${data.oauthClientId} · https://${data.subdomain || "shop"}.zendesk.com/oauth/tokens` : "Not set"}
+                {data.oauthClientId ? `Authorization code · ${data.oauthClientId} · https://${data.subdomain || "mts-portal"}.zendesk.com/oauth/tokens` : "Not set"}
               </p>
               <p className="mt-3 font-medium">Conversations API</p>
-              <p className="mt-1 text-muted">{data.conversationsReady ? `Key set for app ${data.conversationsAppId}` : "Not set"}</p>
+              <p className="mt-1 text-muted">{data.conversationsReady ? `Key ${data.conversationsKeyId} · app ${data.conversationsAppId}` : "Not set"}</p>
               <p className="mt-3 font-medium">Webhook</p>
               <p className="mt-1 text-muted">{data.webhookReady ? `Signing secret set${data.webhookId ? ` · ${data.webhookId}` : ""}` : "Not set"}</p>
               <p className="mt-1 break-all text-xs text-muted">POST /api/zendesk/webhook</p>

@@ -154,7 +154,9 @@ export function SarahWidget() {
       }
       if (event.data?.type === "mts-voice" && Array.isArray(event.data.levels)) {
         setVoiceLevels(event.data.levels.filter((level: unknown) => typeof level === "number").slice(0, 14));
+        return;
       }
+      if (event.data?.type === "mts-minimize") setOpen(false);
     }
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -188,14 +190,10 @@ export function SarahWidget() {
     <>
       {sessionLive ? (
         <div
-          className={full ? "fixed inset-0 z-50 flex md:inset-auto md:right-4 md:bottom-24 md:h-[min(100dvh-8rem,40rem)] md:w-[24rem]" : "pointer-events-none fixed bottom-0 left-0 z-40 h-px w-px overflow-hidden opacity-0"}
+          className={full ? "fixed inset-0 z-50 flex md:inset-auto md:right-4 md:bottom-24 md:h-[min(100dvh-8rem,40rem)] md:w-[24rem]" : "pointer-events-none fixed inset-0 -z-10 opacity-0"}
           style={full && wide ? place : undefined}
         >
-          <section className="grid h-full min-h-0 w-full grid-rows-[auto_minmax(0,1fr)] overflow-hidden bg-surface md:rounded-2xl md:shadow-2xl">
-            <header className="flex h-12 items-center gap-2 bg-ink px-2 text-white">
-              <button type="button" aria-label="Minimize support" onClick={() => setOpen(false)} className="grid size-10 place-items-center rounded-full"><X className="size-5" /></button>
-              <p className="min-w-0 flex-1 truncate text-sm font-semibold">Sarah · Manage Tech Service</p>
-            </header>
+          <section className="h-full min-h-0 w-full overflow-hidden bg-surface md:rounded-2xl md:shadow-2xl">
             <iframe
               ref={frame}
               title="Manage Tech Service support"

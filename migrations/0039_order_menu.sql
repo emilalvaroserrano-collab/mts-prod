@@ -1,0 +1,40 @@
+insert into service_catalog (category, name, summary, kind)
+select v.category, v.name, v.summary, v.kind
+from (
+  values
+    ('Managed IT', 'Server and Network Management Solutions', 'Servers, switches, and the office network.', 'it'),
+    ('Managed IT', 'Backup and Recovery', 'Backups and a tested restore.', 'it'),
+    ('Managed IT', 'Cybersecurity and Compliance', 'Protection and compliance reviews.', 'it'),
+    ('Managed IT', '24-Hour System Mentoring', 'Around-the-clock watch on the systems.', 'it'),
+    ('Managed IT', 'Vendor Management', 'One desk for the vendors you already use.', 'it'),
+    ('Managed IT', 'Virtual CIO Services', 'Planning and priority for the next quarter.', 'it'),
+    ('Managed IT', 'Help Desk', 'Day-to-day support for staff and devices.', 'it'),
+    ('Managed IT', 'Business Continuity', 'Keep the office working through an outage.', 'it'),
+    ('Managed IT', 'Business Antivirus and Endpoint Security', 'Protection for laptops and desktops.', 'it'),
+    ('Cloud Services', 'Application Hosting', 'Host the business applications.', 'cloud'),
+    ('Cloud Services', 'Cloud Migration and Management', 'Move a workload and keep it running.', 'cloud'),
+    ('Cloud Services', 'Desktop as a Service (DaaS)', 'Hosted desktops for staff.', 'cloud'),
+    ('Cloud Services', 'Infrastructure as a Service (IaaS)', 'Virtual machines and storage.', 'cloud'),
+    ('Cloud Services', 'Colocation', 'Rack space for equipment you own.', 'cloud'),
+    ('Cloud Services', 'Virtual Server Hosting', 'Servers without new hardware.', 'cloud'),
+    ('Cloud Services', 'Virtualization Support', 'Care for the virtual hosts.', 'cloud'),
+    ('Cloud Services', 'VoIP Phone System', 'Cloud phone system for the office.', 'phone'),
+    ('IT Project Consulting', 'IT Consulting', 'A plan before the project starts.', 'project'),
+    ('IT Project Consulting', 'Migration and Deployment', 'Move mail, files, or servers.', 'project'),
+    ('IT Project Consulting', 'WiFi Networks', 'Site survey and wireless install.', 'project'),
+    ('IT Project Consulting', 'Mobility (BYOD)', 'Phones and personal devices on the network.', 'project'),
+    ('IT Project Consulting', 'Performance and Security Audits', 'Review of speed, access, and exposure.', 'project'),
+    ('IT Project Consulting', 'Free IT Health Check', 'A short review of backups, servers, and risk.', 'project'),
+    ('IT Project Consulting', 'Structured Data Cabling', 'Data drops for the office. $175 each.', 'project'),
+    ('IT Project Consulting', 'Office Move & IT Relocation', 'Move the network to a new site.', 'project'),
+    ('IT Project Consulting', 'Domain Registration and Business Email Setup', 'A domain and mailboxes for the company.', 'project'),
+    ('Business App Support', 'Google G Suite', 'Mail and files on Google.', 'apps'),
+    ('Business App Support', 'Microsoft Active Directory', 'Users, groups, and sign-in.', 'apps'),
+    ('Business App Support', 'Microsoft 365', 'Tenant, licensing, and apps.', 'apps'),
+    ('Business App Support', 'Microsoft Sharepoint', 'Sites, files, and sharing.', 'apps'),
+    ('Business App Support', 'Microsoft Azure', 'Subscriptions and access.', 'apps'),
+    ('Business App Support', 'Microsoft Teams', 'Meetings, calling, and channels.', 'apps'),
+    ('Business App Support', 'Microsoft Intune', 'Device enrollment and policy.', 'apps'),
+    ('Business App Support', 'Microsoft Windows Management', 'Windows updates and device care.', 'apps')
+) as v(category, name, summary, kind)
+where not exists (select 1 from service_catalog s where s.name = v.name and s.category = v.category);

@@ -28,7 +28,7 @@ function VerifyPage() {
   });
 
   return (
-    <main className="grid min-h-dvh place-items-center bg-[#f7fafb] px-4">
+    <main className="grid min-h-dvh place-items-center px-4">
       <form
         className="grid w-full max-w-md gap-4 rounded-3xl border border-line bg-white p-6"
         onSubmit={(event) => {

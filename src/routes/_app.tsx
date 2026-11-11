@@ -17,8 +17,8 @@ function AppLayout() {
     enabled: Boolean(user),
   });
   if (isPending || (user && home.isPending)) return <Boot />;
-  if (!user) return <Navigate to="/portal" />;
-  if (home.data?.destination === "portal") return <Navigate to="/portal" />;
+  if (!user) return <Navigate to="/upgrade" />;
+  if (!home.data?.desk) return <Navigate to="/portal" />;
   return (
     <Shell>
       <Outlet />

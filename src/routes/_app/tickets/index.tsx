@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { listTickets } from "@/lib/portal/api";
-import { ago } from "@/lib/portal/format";
+import { ago, day } from "@/lib/portal/format";
 import { ticketSearch } from "@/lib/portal/ticket-search";
 import { ErrorNote, Loading, PageHeader, Select, StatusBadge, ViewSwitch, useViewMode } from "@/components/ui";
 
@@ -131,42 +131,53 @@ function TicketsPage() {
           {query.data.tickets.length === 0 ? <li className="py-6 text-center text-sm text-muted">No tickets match this view.</li> : null}
         </ul>
         <div className="hidden overflow-x-auto rounded-2xl border border-line bg-surface md:block">
-          <table className="w-full min-w-[44rem] text-left text-sm">
+          <table className="w-full min-w-[72rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Ticket</th>
-                <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Assignee</th>
+                <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Subject</th>
+                <th className="px-4 py-3 font-medium">Requester</th>
+                <th className="px-4 py-3 font-medium">Requested</th>
                 <th className="px-4 py-3 font-medium">Updated</th>
+                <th className="px-4 py-3 font-medium">Channel</th>
+                <th className="px-4 py-3 font-medium">Group</th>
+                <th className="px-4 py-3 font-medium">Assignee</th>
+                <th className="px-4 py-3 font-medium">Type</th>
+                <th className="px-4 py-3 font-medium">Priority</th>
+                <th className="px-4 py-3 font-medium">Status</th>
               </tr>
             </thead>
             <tbody>
               {query.data.tickets.length === 0 ? (
                 <tr>
-                  <td className="stack-empty px-4 py-8 text-muted" colSpan={5}>
+                  <td className="stack-empty px-4 py-8 text-muted" colSpan={11}>
                     No tickets match this view.
                   </td>
                 </tr>
               ) : null}
               {query.data.tickets.map((ticket) => (
                 <tr key={ticket.id} className="border-t border-line">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 font-mono text-xs" data-label="ID">{ticket.zendeskId ? `#${ticket.zendeskId}` : `P-${ticket.id}`}</td>
+                  <td className="px-4 py-3" data-label="Subject">
                     <Link to="/tickets/$ticketId" params={{ ticketId: String(ticket.id) }} className="font-medium hover:underline">
                       {ticket.subject}
                     </Link>
-                    <p className="mt-1 text-xs text-muted">
-                      {ticket.zendeskId ? `#${ticket.zendeskId}` : `P-${ticket.id}`}
-                      {ticket.viewLabel ? ` · ${ticket.viewLabel}` : ""}
-                      {ticket.category ? ` · ${ticket.category}` : ""}
-                    </p>
+                    {ticket.category ? <p className="mt-1 text-xs text-muted">{ticket.category}</p> : null}
                   </td>
-                  <td className="px-4 py-3" data-label="Company">{ticket.organizationName || "—"}</td>
+                  <td className="px-4 py-3" data-label="Requester">
+                    <p>{ticket.requesterName || "—"}</p>
+                    <p className="text-xs text-muted">{ticket.requesterEmail}</p>
+                  </td>
+                  <td className="px-4 py-3 text-muted" data-label="Requested">{day(ticket.createdAt)}</td>
+                  <td className="px-4 py-3 text-muted" data-label="Updated">{ago(ticket.updatedAt)}</td>
+                  <td className="px-4 py-3 capitalize" data-label="Channel">{ticket.channel || "—"}</td>
+                  <td className="px-4 py-3" data-label="Group">{ticket.groupName || ticket.viewLabel || "—"}</td>
+                  <td className="px-4 py-3" data-label="Assignee">{ticket.assignee || "Unassigned"}</td>
+                  <td className="px-4 py-3 capitalize" data-label="Type">{ticket.ticketType || "—"}</td>
+                  <td className="px-4 py-3 capitalize" data-label="Priority">{ticket.priority || "—"}</td>
                   <td className="px-4 py-3" data-label="Status">
                     <StatusBadge value={ticket.status} />
                   </td>
-                  <td className="px-4 py-3" data-label="Assignee">{ticket.assignee || "Unassigned"}</td>
-                  <td className="px-4 py-3 text-muted" data-label="Updated">{ago(ticket.updatedAt)}</td>
                 </tr>
               ))}
             </tbody>

@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { acceptZendeskWebhookUser } from "@/lib/portal/api";
 import { getSql } from "@/lib/db";
 import { ingestZendeskWebhook, verifyZendeskWebhook } from "@/lib/portal/zendesk-conversations";
 
@@ -12,7 +13,8 @@ export const Route = createFileRoute("/api/zendesk/webhook")({
           const payload = raw ? JSON.parse(raw) : {};
           const sql = await getSql();
           const stored = await ingestZendeskWebhook(sql, payload);
-          return Response.json({ ok: true, stored });
+          const invited = await acceptZendeskWebhookUser(sql, payload);
+          return Response.json({ ok: true, stored, invited });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Webhook rejected.";
           const status = /signature|timestamp|Webhook ID|SECRET/.test(message) ? 401 : 400;

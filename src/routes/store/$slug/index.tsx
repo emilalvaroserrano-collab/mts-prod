@@ -161,8 +161,8 @@ function Shop() {
         <div className={layout === "grid" ? "grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3" : "grid w-full gap-3"}>
           {products.map((product, index) => (
             <article key={product.id} className={layout === "grid" ? "shop-card shop-rise grid min-w-0 grid-rows-[auto_1fr_auto] overflow-hidden rounded-[24px] border border-line bg-white p-3" : "shop-card grid w-full grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3 overflow-hidden rounded-2xl border border-line bg-white p-3"} style={{ animationDelay: `${Math.min(index, 8) * 40}ms` }}>
-              <button type="button" onClick={() => product.imageUrl && setZoom(product)} className={layout === "grid" ? "relative block overflow-hidden rounded-[18px] bg-[#eef4f5]" : "overflow-hidden rounded-xl bg-[#eef4f5]"} aria-label={`View ${product.name}`}>
-                {product.imageUrl ? <img src={product.imageUrl} alt="" className="aspect-square w-full object-contain transition duration-300 hover:scale-[1.03]" /> : <div className="aspect-square" />}
+              <button type="button" onClick={() => product.imageUrl && setZoom(product)} className={layout === "grid" ? "relative flex aspect-square items-center justify-center overflow-hidden rounded-[18px] bg-[#eef4f5]" : "flex size-[5.5rem] items-center justify-center overflow-hidden rounded-xl bg-[#eef4f5]"} aria-label={`View ${product.name}`}>
+                {product.imageUrl ? <img src={product.imageUrl} alt="" className="max-h-[86%] max-w-[86%] object-contain object-center" /> : <div className="aspect-square" />}
                 <span className={product.available && product.stock > 0 ? "absolute left-3 top-3 rounded-full bg-white/90 px-2 py-1 text-[10px] font-semibold text-ink" : "absolute left-3 top-3 rounded-full bg-ink/80 px-2 py-1 text-[10px] font-semibold text-white"}>
                   {product.available && product.stock > 0 ? `${product.stock} ready` : "Ask the desk"}
                 </span>

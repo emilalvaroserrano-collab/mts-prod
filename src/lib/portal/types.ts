@@ -30,6 +30,8 @@ export type Ticket = {
   subject: string;
   status: string;
   priority: string;
+  ticketType: string;
+  groupName: string;
   category: string;
   organizationId: number | null;
   organizationName: string;
@@ -38,6 +40,8 @@ export type Ticket = {
   assignee: string;
   tags: string[];
   viewLabel: string;
+  channel: string;
+  externalId: string;
   createdAt: string;
   updatedAt: string;
 };
@@ -59,6 +63,11 @@ export type Org = {
   address: string;
   zendeskOrgId: string;
   notes: string;
+  details: string;
+  tags: string;
+  externalId: string;
+  sharedTickets: boolean;
+  sharedComments: boolean;
   portalAccess: boolean;
   orderingEnabled: boolean;
   userRequestsEnabled: boolean;
@@ -217,6 +226,8 @@ export type Integration = {
   lastError: string;
   conversationsReady: boolean;
   conversationsAppId: string;
+  conversationsKeyId: string;
+  conversationsSecretSet: boolean;
   webhookReady: boolean;
   webhookId: string;
   oauthReady: boolean;

@@ -3,8 +3,8 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
 import { listOrgs, saveOrg } from "@/lib/portal/api";
-import { Badge, Button, Empty, ErrorNote, Field, Input, Loading, Modal, PageHeader, ViewSwitch, useViewMode } from "@/components/ui";
-import { errorText } from "@/components/ui";
+import { day } from "@/lib/portal/format";
+import { Badge, Button, Empty, ErrorNote, Field, Input, Loading, Modal, PageHeader, Textarea, ViewSwitch, errorText, useViewMode } from "@/components/ui";
 
 export const Route = createFileRoute("/_app/organizations/")({
   component: CompaniesPage,
@@ -17,6 +17,8 @@ function CompaniesPage() {
   const [name, setName] = useState("");
   const [domain, setDomain] = useState("");
   const [industry, setIndustry] = useState("");
+  const [phone, setPhone] = useState("");
+  const [notes, setNotes] = useState("");
   const navigate = useNavigate();
   const client = useQueryClient();
   const save = useMutation({
@@ -26,10 +28,10 @@ function CompaniesPage() {
           name,
           domain,
           industry,
-          phone: "",
+          phone,
           address: "",
           zendeskOrgId: "",
-          notes: "",
+          notes,
           portalAccess: true,
           orderingEnabled: true,
           userRequestsEnabled: true,
@@ -94,31 +96,34 @@ function CompaniesPage() {
           ))}
         </ul>
         <div className="hidden overflow-x-auto rounded-2xl border border-line bg-surface md:block">
-          <table className="w-full min-w-[40rem] text-left text-sm">
+          <table className="w-full min-w-[56rem] text-left text-sm">
             <thead className="text-xs text-muted">
               <tr>
-                <th className="px-4 py-3 font-medium">Company</th>
-                <th className="px-4 py-3 font-medium">People</th>
-                <th className="px-4 py-3 font-medium">Open tickets</th>
-                <th className="px-4 py-3 font-medium">Access</th>
+                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Domains</th>
+                <th className="px-4 py-3 font-medium">Details</th>
+                <th className="px-4 py-3 font-medium">Created</th>
+                <th className="px-4 py-3 font-medium">External ID</th>
+                <th className="px-4 py-3 font-medium">Users</th>
+                <th className="px-4 py-3 font-medium">Tickets</th>
               </tr>
             </thead>
             <tbody>
               {query.data.map((org) => (
                 <tr key={org.id} className="border-t border-line">
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3" data-label="Name">
                     <Link to="/organizations/$orgId" params={{ orgId: String(org.id) }} className="font-medium hover:underline">
                       {org.name}
                     </Link>
-                    <p className="mt-1 text-xs text-muted">
-                      {org.industry || "No industry"}
-                      {org.zendeskOrgId ? ` · Zendesk ${org.zendeskOrgId}` : ""}
-                    </p>
                   </td>
-                  <td className="px-4 py-3 font-mono tabular-nums" data-label="People">{org.userCount}</td>
-                  <td className="px-4 py-3 font-mono tabular-nums" data-label="Open tickets">{org.openTickets}</td>
-                  <td className="px-4 py-3" data-label="Access">
-                    <Badge tone={org.portalAccess ? "good" : "neutral"}>{org.portalAccess ? "Portal on" : "Portal off"}</Badge>
+                  <td className="px-4 py-3" data-label="Domains">{org.domain || "—"}</td>
+                  <td className="px-4 py-3" data-label="Details">{org.industry || org.notes || "—"}</td>
+                  <td className="px-4 py-3 text-muted" data-label="Created">{org.createdAt ? day(org.createdAt) : "—"}</td>
+                  <td className="px-4 py-3 font-mono text-xs" data-label="External ID">{org.zendeskOrgId || "—"}</td>
+                  <td className="px-4 py-3 tabular-nums" data-label="Users">{org.userCount}</td>
+                  <td className="px-4 py-3" data-label="Tickets">
+                    <span className="tabular-nums">{org.openTickets}</span>
+                    <Badge tone={org.portalAccess ? "good" : "neutral"}>{org.portalAccess ? "Shared" : "Private"}</Badge>
                   </td>
                 </tr>
               ))}
@@ -128,7 +133,7 @@ function CompaniesPage() {
         </>
         )
       ) : null}
-      <Modal open={open} onOpenChange={setOpen} title="Add company" description="You can link the Zendesk organization after it is saved.">
+      <Modal open={open} onOpenChange={setOpen} title="Add organization" description="Same fields Zendesk stores on an organization.">
         <form
           className="grid gap-3"
           onSubmit={(event) => {
@@ -139,14 +144,20 @@ function CompaniesPage() {
           <Field label="Name">
             <Input value={name} onChange={(event) => setName(event.target.value)} required />
           </Field>
-          <Field label="Domain">
+          <Field label="Domain names">
             <Input value={domain} onChange={(event) => setDomain(event.target.value)} placeholder="company.example" />
           </Field>
-          <Field label="Industry">
-            <Input value={industry} onChange={(event) => setIndustry(event.target.value)} />
+          <Field label="Details">
+            <Input value={industry} onChange={(event) => setIndustry(event.target.value)} placeholder="Industry" />
+          </Field>
+          <Field label="Phone">
+            <Input value={phone} onChange={(event) => setPhone(event.target.value)} />
+          </Field>
+          <Field label="Notes">
+            <Textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
           </Field>
           <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? "Saving" : "Create company"}
+            {save.isPending ? "Saving" : "Create organization"}
           </Button>
         </form>
       </Modal>

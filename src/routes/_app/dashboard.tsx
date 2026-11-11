@@ -5,7 +5,7 @@ import { ago, money } from "@/lib/portal/format";
 import { ticketSearch } from "@/lib/portal/ticket-search";
 import { ErrorNote, Loading, PageHeader, Panel, StatusBadge } from "@/components/ui";
 
-export const Route = createFileRoute("/_app/")({
+export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 

@@ -12,7 +12,8 @@ import {
   probeAlternative,
   refreshAlternativePayment,
 } from "./alternative";
-import { conversationsConfig, testConversations } from "./zendesk-conversations";
+import { conversationsConfig, ensureConversationRecord, testConversations, upsertConversationUser } from "./zendesk-conversations";
+import { mtsAuthPublic } from "./mts-oauth";
 import { lookupAwb } from "./ups";
 import {
   applyPaymentStatus,
@@ -160,6 +161,10 @@ function mapTicket(row: Row): Ticket {
     assignee: s(row, "assignee"),
     tags: tagsOf(s(row, "tags")),
     viewLabel: s(row, "view_label"),
+    ticketType: s(row, "ticket_type"),
+    groupName: s(row, "group_name"),
+    channel: s(row, "channel"),
+    externalId: s(row, "external_id"),
     createdAt: s(row, "created_at"),
     updatedAt: s(row, "updated_at"),
   };
@@ -175,6 +180,11 @@ function mapOrg(row: Row): Org {
     address: s(row, "address"),
     zendeskOrgId: s(row, "zendesk_org_id"),
     notes: s(row, "notes"),
+    details: s(row, "details"),
+    tags: s(row, "tags"),
+    externalId: s(row, "external_id"),
+    sharedTickets: b(row, "shared_tickets"),
+    sharedComments: b(row, "shared_comments"),
     portalAccess: b(row, "portal_access"),
     orderingEnabled: b(row, "ordering_enabled"),
     userRequestsEnabled: b(row, "user_requests_enabled"),
@@ -419,17 +429,8 @@ async function loadActor(sql: Sql, userId: string): Promise<Actor> {
   `;
   const actor = mapActor({ ...row, name, email: email || s(row, "email") });
   if (!actor.active) throw new Error("This account is deactivated.");
-  if (email && !s(row, "zendesk_user_id")) {
-    try {
-      const zendeskUserId = await upsertZendeskUser(sql, {
-        name,
-        email,
-        kind: "staff",
-      });
-      if (zendeskUserId) await sql`update portal_staff set zendesk_user_id = ${zendeskUserId} where user_id = ${userId}`;
-    } catch {
-      /* sign-in still opens if Zendesk is down */
-    }
+  if (actor.role === "owner" || actor.role === "admin" || actor.role === "agent") {
+    return { ...actor, organizationId: null, organizationName: null };
   }
   return actor;
 }
@@ -669,6 +670,12 @@ function oauthReady(settings: ZSettings) {
   return Boolean(settings.subdomain && settings.oauthClientId && settings.oauthClientSecret);
 }
 
+function clientCredentialsReady(settings: ZSettings) {
+  const id = settings.oauthClientId.trim().toLowerCase();
+  if (id === "mtsportal" || id === "mts-portal") return false;
+  return oauthReady(settings);
+}
+
 type OauthCache = { key: string; token: string; expiresAt: number };
 const oauthCache = globalThis as typeof globalThis & { __zendeskOauth?: OauthCache };
 
@@ -676,7 +683,7 @@ async function zendeskAccessToken(settings: ZSettings) {
   const key = `${settings.subdomain}:${settings.oauthClientId}:${settings.oauthScopes}`;
   const cached = oauthCache.__zendeskOauth;
   if (cached && cached.key === key && cached.expiresAt > Date.now() + 15_000) return cached.token;
-  const scopes = [settings.oauthScopes || "read write", "users:read users:write tickets:read tickets:write organizations:read"];
+  const scopes = ["read", settings.oauthScopes || "read", "users:read tickets:read organizations:read"];
   let lastDetail = "Zendesk rejected the OAuth client.";
   for (const scope of scopes) {
     for (const asForm of [false, true]) {
@@ -720,15 +727,15 @@ async function zendeskAccessToken(settings: ZSettings) {
 }
 
 async function zendeskAuthorization(settings: ZSettings) {
-  if (oauthReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
+  if (clientCredentialsReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
   if (settings.subdomain && settings.email && settings.apiToken) {
     return `Basic ${basicAuth(settings.email, settings.apiToken)}`;
   }
-  throw new Error("Zendesk is not connected. Set ZENDESK_OAUTH_CLIENT_ID and ZENDESK_OAUTH_CLIENT_SECRET for shop, or an API token.");
+  throw new Error("Zendesk Support is not connected. Add an agent email and API token. The shared mts-portal account is already set.");
 }
 
 async function zendesk(settings: ZSettings, path: string, init?: RequestInit) {
-  if (!settings.subdomain || (!oauthReady(settings) && !(settings.email && settings.apiToken))) {
+  if (!settings.subdomain || (!clientCredentialsReady(settings) && !(settings.email && settings.apiToken))) {
     throw new Error("Zendesk is not connected. Set ZENDESK_OAUTH_CLIENT_ID and ZENDESK_OAUTH_CLIENT_SECRET for shop, or an API token.");
   }
   const url = path.startsWith("http") ? path : `https://${settings.subdomain}.zendesk.com/api/v2${path}`;
@@ -743,7 +750,7 @@ async function zendesk(settings: ZSettings, path: string, init?: RequestInit) {
       },
     });
   let response = await run();
-  if (response.status === 401 && oauthReady(settings)) {
+  if (response.status === 401 && clientCredentialsReady(settings)) {
     oauthCache.__zendeskOauth = undefined;
     response = await run();
   }
@@ -785,7 +792,7 @@ async function rememberZendesk(sql: Sql, status: string, error: string, synced: 
 }
 
 function supportConnected(settings: ZSettings) {
-  return oauthReady(settings) || Boolean(settings.subdomain && settings.email && settings.apiToken);
+  return clientCredentialsReady(settings) || Boolean(settings.subdomain && settings.email && settings.apiToken);
 }
 
 async function upsertZendeskUser(sql: Sql, input: { name: string; email: string; kind: "staff" | "customer" | "shop" }) {
@@ -808,6 +815,115 @@ async function upsertZendeskUser(sql: Sql, input: { name: string; email: string;
   });
   const remote = obj(created.user);
   return remote.id != null ? String(remote.id) : "";
+}
+
+type ZendeskDirectoryUser = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  organizationId: string;
+};
+
+function directoryUser(item: unknown): ZendeskDirectoryUser | null {
+  const user = obj(item);
+  const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
+  if (!email || user.id == null || user.active === false) return null;
+  const role = typeof user.role === "string" ? user.role : "end-user";
+  if (role !== "end-user") return null;
+  return {
+    id: String(user.id),
+    name: typeof user.name === "string" && user.name.trim() ? user.name.trim() : email,
+    email,
+    phone: typeof user.phone === "string" ? user.phone : "",
+    organizationId: user.organization_id != null ? String(user.organization_id) : "",
+  };
+}
+
+async function acceptZendeskDirectoryUser(sql: Sql, remote: ZendeskDirectoryUser) {
+  let organizationId: number | null = null;
+  if (remote.organizationId) {
+    const orgs = await sql<Row>`select id from organizations where zendesk_org_id = ${remote.organizationId} limit 1`;
+    if (orgs[0]) organizationId = n(orgs[0], "id");
+  }
+  const existing = await sql<Row>`select id from shop_customers where lower(email) = ${remote.email} limit 1`;
+  if (existing[0]) {
+    const id = n(existing[0], "id");
+    await sql`
+      update shop_customers set
+        name = ${remote.name},
+        phone = case when ${remote.phone} <> '' then ${remote.phone} else phone end,
+        zendesk_user_id = ${remote.id},
+        email_verified = true,
+        organization_id = coalesce(${organizationId}, organization_id),
+        grant_shop = true
+      where id = ${id}
+    `;
+    return id;
+  }
+  const inserted = await sql<Row>`
+    insert into shop_customers (
+      email, name, phone, password_hash, organization_id, role_id, email_verified,
+      zendesk_user_id, grant_shop, grant_services, grant_invoice, pay_later
+    ) values (
+      ${remote.email}, ${remote.name}, ${remote.phone}, ${await hashShopPassword(crypto.randomUUID())}, ${organizationId}, 'buyer', true,
+      ${remote.id}, true, false, false, false
+    )
+    returning id
+  `;
+  return n(inserted[0], "id");
+}
+
+async function lookupZendeskEndUser(sql: Sql, email: string) {
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return null;
+  const payload = await zendesk(settings, `/users/search.json?query=${encodeURIComponent(`email:${email}`)}`);
+  const users = Array.isArray(payload.users) ? payload.users : [];
+  return users.map(directoryUser).find((user) => user && user.email === email) ?? null;
+}
+
+export async function importZendeskUsers(sql: Sql) {
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return 0;
+  let imported = 0;
+  let path = "/users.json?role[]=end-user&per_page=100";
+  for (let page = 0; page < 5 && path; page += 1) {
+    const payload = await zendesk(settings, path);
+    const users = Array.isArray(payload.users) ? payload.users : [];
+    for (const item of users) {
+      const remote = directoryUser(item);
+      if (!remote) continue;
+      await acceptZendeskDirectoryUser(sql, remote);
+      imported += 1;
+    }
+    const next = typeof payload.next_page === "string" ? payload.next_page : "";
+    path = next && next !== path ? next : "";
+  }
+  return imported;
+}
+
+export async function acceptZendeskWebhookUser(sql: Sql, payload: unknown) {
+  const body = obj(payload);
+  const remote = directoryUser(body.user ?? body);
+  if (!remote) return false;
+  await acceptZendeskDirectoryUser(sql, remote);
+  return true;
+}
+
+export async function ensureDeskOrganization(sql: Sql) {
+  const found = await sql<Row>`
+    select id from organizations
+    where name = 'Manage Tech Service' and coalesce(domain, '') = ''
+    order by id
+    limit 1
+  `;
+  if (found[0]) return n(found[0], "id");
+  const created = await sql<Row>`
+    insert into organizations (name, domain, notes, portal_access, ordering_enabled, user_requests_enabled, approval_required)
+    values ('Manage Tech Service', '', 'Company desk. Records come from the mts-portal Zendesk account.', true, true, true, false)
+    returning id
+  `;
+  return n(created[0], "id");
 }
 
 async function openWelcomeTicket(
@@ -881,11 +997,29 @@ export async function filePortalTicket(
     limit 1
   `;
   if (recent[0]) return { ticketId: n(recent[0], "id"), zendeskId: s(recent[0], "zendesk_id") };
+  let zendeskId = "";
+  if (conversationsConfig().ready && input.email) {
+    const remoteUserId = await upsertConversationUser({
+      externalId: `portal:${input.email.toLowerCase()}`,
+      name: input.name || input.email,
+      email: input.email.toLowerCase(),
+      company: "",
+    });
+    const conversationId = await ensureConversationRecord({
+      userId: remoteUserId,
+      title: input.subject,
+      description: input.category || "Support",
+      body: input.body,
+      company: "",
+      kind: "ticket",
+    });
+    zendeskId = `sc:${conversationId}`;
+  }
   const inserted = await sql<Row>`
-    insert into tickets (subject, status, priority, category, organization_id, requester_name, requester_email, tags, view_label)
+    insert into tickets (subject, status, priority, category, organization_id, requester_name, requester_email, tags, view_label, zendesk_id)
     values (
       ${input.subject}, 'new', 'normal', ${input.category}, ${input.organizationId},
-      ${input.name}, ${input.email}, 'portal,customer', ''
+      ${input.name}, ${input.email}, 'portal,customer', '', ${zendeskId}
     )
     returning id
   `;
@@ -894,7 +1028,7 @@ export async function filePortalTicket(
     insert into ticket_comments (ticket_id, author_name, body, public_note)
     values (${ticketId}, ${input.name || "Customer"}, ${input.body}, true)
   `;
-  let zendeskId = "";
+  if (zendeskId) return { ticketId, zendeskId };
   const settings = await readZendesk(sql);
   if (!supportConnected(settings)) {
     await enqueueJob(sql, "zendesk_ticket", `ticket-${ticketId}`, { ticketId });
@@ -922,30 +1056,69 @@ export async function filePortalTicket(
   return { ticketId, zendeskId };
 }
 
+async function zendeskDeskRole(sql: Sql, email: string) {
+  const saved = await sql<Row>`
+    select zendesk_role as role from customer_users where lower(email) = ${email}
+    union all
+    select role from portal_staff where lower(email) = ${email} and active = true
+    limit 1
+  `;
+  const stored = saved[0] ? s(saved[0], "role").toLowerCase() : "";
+  if (stored === "owner" || stored === "admin") return stored;
+  if (stored === "agent" || stored === "staff") return "agent";
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return "";
+  try {
+    const payload = await zendesk(settings, `/users/search.json?query=${encodeURIComponent(`email:${email}`)}`);
+    const users = Array.isArray(payload.users) ? payload.users : [];
+    const match = users.map(obj).find((user) => String(user.email || "").toLowerCase() === email);
+    const role = typeof match?.role === "string" ? match.role.toLowerCase() : "";
+    if (role === "admin" || role === "agent") return role;
+  } catch {
+    return "";
+  }
+  return "";
+}
+
 export const getSessionHome = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
   .handler(async ({ context }) => {
     const sql = await getSql();
     const rows = await sql<Row>`select role, active from portal_staff where user_id = ${context.userId} limit 1`;
     const row = rows[0];
+    const users = await sql<Row>`select name, email from "user" where id = ${context.userId} limit 1`;
+    const user = users[0];
+    const email = user ? s(user, "email").toLowerCase() : "";
     if (!row) {
       const any = await sql<Row>`select count(*)::int as n from portal_staff`;
       const empty = (any[0] ? n(any[0], "n") : 0) === 0;
-      const users = await sql<Row>`select name, email from "user" where id = ${context.userId} limit 1`;
-      const user = users[0];
       const allow = (process.env.BOOTSTRAP_OWNER_EMAIL || "").trim().toLowerCase();
-      const email = user ? s(user, "email").toLowerCase() : "";
       if (empty && allow && email === allow) {
         await sql`
           insert into portal_staff (user_id, name, email, role)
           values (${context.userId}, ${user ? s(user, "name") : "Owner"}, ${email}, 'owner')
           on conflict (user_id) do nothing
         `;
-        return { destination: "admin" } as const;
+        return { destination: "portal" as const, desk: true, role: "owner" };
       }
     }
-    const staff = Boolean(row && b(row, "active"));
-    return { destination: staff ? "admin" : "portal" } as const;
+    let role = row && b(row, "active") ? s(row, "role") : "";
+    if (role !== "owner" && role !== "admin" && role !== "agent" && email) {
+      const remote = await zendeskDeskRole(sql, email);
+      if (remote) {
+        role = remote;
+        await sql`
+          insert into portal_staff (user_id, name, email, role, active)
+          values (${context.userId}, ${user ? s(user, "name") : email}, ${email}, ${remote}, true)
+          on conflict (user_id) do update set
+            role = case when portal_staff.role = 'owner' then portal_staff.role else excluded.role end,
+            active = true,
+            email = excluded.email
+        `;
+      }
+    }
+    const desk = role === "owner" || role === "admin" || role === "agent";
+    return { destination: "portal" as const, desk, role: desk ? role : "" };
   });
 
 export const openPortalFromAuth = createServerFn({ method: "GET" })
@@ -957,36 +1130,43 @@ export const openPortalFromAuth = createServerFn({ method: "GET" })
     if (!user || !s(user, "email")) throw new Error("Sign in again.");
     const email = s(user, "email").toLowerCase();
     const name = s(user, "name") || email;
-    const verifiedRow = await sql<Row>`select "emailVerified" as verified from "user" where id = ${context.userId} limit 1`;
-    const verified = Boolean(verifiedRow[0] && b(verifiedRow[0], "verified"));
-    const existing = await sql<Row>`select id from shop_customers where email = ${email}`;
+    const staff = await sql<Row>`select user_id from portal_staff where lower(email) = ${email} and active = true limit 1`;
+    const zendeskAccount = await sql<Row>`select "accountId" from account where "userId" = ${context.userId} and "providerId" = 'zendesk' limit 1`;
+    const zendeskUserId = zendeskAccount[0] ? s(zendeskAccount[0], "accountId") : "";
+    let remote: ZendeskDirectoryUser | null = null;
+    try {
+      remote = await lookupZendeskEndUser(sql, email);
+    } catch {
+      remote = null;
+    }
+    if (remote) await acceptZendeskDirectoryUser(sql, remote);
+    const existing = await sql<Row>`select id, zendesk_user_id from shop_customers where lower(email) = ${email} limit 1`;
+    if (!remote && !staff[0] && !zendeskUserId && !(existing[0] && s(existing[0], "zendesk_user_id"))) {
+      throw new Error("This portal is invite only. Ask MTS to add this email in Zendesk, then sign in again.");
+    }
     if (!existing[0]) {
-      const org = await sql<Row>`
-        insert into organizations (name, phone, portal_access, ordering_enabled, notes)
-        values (${name}, '', true, true, 'Customer account. The shop is on. Services and invoices stay off until an admin approves them.')
-        returning id
-      `;
-      const organizationId = n(org[0], "id");
       await sql`
         insert into shop_customers (
           email, name, password_hash, organization_id, business_name, role_id, email_verified,
-          grant_shop, grant_services, grant_invoice, pay_later
+          grant_shop, grant_services, grant_invoice, pay_later, zendesk_user_id
         ) values (
-          ${email}, ${name}, ${await hashShopPassword(crypto.randomUUID())}, ${organizationId}, '', 'buyer', ${verified},
-          true, false, false, false
+          ${email}, ${name}, ${await hashShopPassword(crypto.randomUUID())}, null, '', 'buyer', true,
+          true, false, false, false, ${zendeskUserId}
         )
       `;
+    } else if (zendeskUserId && !s(existing[0], "zendesk_user_id")) {
+      await sql`update shop_customers set zendesk_user_id = ${zendeskUserId} where id = ${n(existing[0], "id")}`;
     }
     const token = await newShopToken();
     await sql`
       update shop_customers set
         session_token = ${token},
         session_expires = now() + interval '400 days',
-        name = ${name},
-        email_verified = case when ${verified} then true else email_verified end
-      where email = ${email}
+        name = case when name = '' then ${name} else name end,
+        email_verified = true
+      where lower(email) = ${email}
     `;
-    return { token, email, name };
+    return { token, email, name: remote?.name || name };
   });
 
 export const savePortalCompany = createServerFn({ method: "POST" })
@@ -1275,9 +1455,14 @@ async function ensureZendeskSync(sql: Sql, actor: Actor) {
   if (Date.now() - zendeskSyncAt < 120_000) return;
   zendeskSyncAt = Date.now();
   if (!zendeskSync) {
-    zendeskSync = importFromZendesk(sql, actor, settings).finally(() => {
-      zendeskSync = null;
-    });
+    zendeskSync = importFromZendesk(sql, actor, settings)
+      .then(async (count) => {
+        await importZendeskUsers(sql);
+        return count;
+      })
+      .finally(() => {
+        zendeskSync = null;
+      });
   }
   try {
     await zendeskSync;
@@ -1341,8 +1526,8 @@ export const getShell = createServerFn({ method: "GET" })
       actor,
       brandName: setting ? s(setting, "brand_name") : "Manage Tech Service",
       tagline: setting ? s(setting, "tagline") : "",
-      zendeskConnected: Boolean(oauthReady(live) || (live.subdomain && live.email && live.apiToken) || conversationsConfig().ready),
-      zendeskStatus: link ? s(link, "last_status") : oauthReady(live) || live.apiToken ? "ready" : "not_connected",
+      zendeskConnected: Boolean(clientCredentialsReady(live) || (live.subdomain && live.email && live.apiToken) || conversationsConfig().ready),
+      zendeskStatus: link ? s(link, "last_status") : clientCredentialsReady(live) || live.apiToken || conversationsConfig().ready ? "ready" : "not_connected",
       orderCount: counts ? n(counts, "orders") : 0,
       ticketCount: counts ? n(counts, "tickets") : 0,
       peopleCount: counts ? n(counts, "people") : 0,
@@ -1953,13 +2138,19 @@ export const saveCustomer = createServerFn({ method: "POST" })
       await audit(sql, actor, "Updated person", data.email, data.active ? data.permissionLevel : "Deactivated");
       return { id: data.id, ticketId: 0, zendeskId: "", warning: "" };
     }
+    const zendeskUserId = await upsertConversationUser({
+      externalId: `portal:${data.email.toLowerCase()}`,
+      name: data.name,
+      email: data.email.toLowerCase(),
+      company: "",
+    }).catch(() => "");
     const inserted = await sql<Row>`
       insert into customer_users (
         organization_id, name, email, title, permission_level,
         can_order, can_request_users, can_approve_orders, active, zendesk_user_id
       ) values (
         ${data.organizationId}, ${data.name}, ${data.email}, ${data.title}, ${data.permissionLevel},
-        ${data.canOrder}, ${data.canRequestUsers}, ${data.canApproveOrders}, ${data.active}, ${data.zendeskUserId}
+        ${data.canOrder}, ${data.canRequestUsers}, ${data.canApproveOrders}, ${data.active}, ${zendeskUserId || data.zendeskUserId}
       )
       returning id
     `;
@@ -1972,8 +2163,6 @@ export const saveCustomer = createServerFn({ method: "POST" })
       detail: data.title,
       actorName: actor.name,
     });
-    const zendeskUserId = await upsertZendeskUser(sql, { name: data.name, email: data.email, kind: "customer" }).catch(() => "");
-    if (zendeskUserId) await sql`update customer_users set zendesk_user_id = ${zendeskUserId} where id = ${n(inserted[0], "id")}`;
     return { id: n(inserted[0], "id"), ...ticket };
   });
 
@@ -3024,7 +3213,7 @@ export const getSarahMetrics = createServerFn({ method: "GET" })
 
 export const getIntegration = createServerFn({ method: "GET" })
   .middleware([authMiddleware])
-  .handler(async ({ context }): Promise<Integration & { orgs: Org[] }> => {
+  .handler(async ({ context }): Promise<Integration & { orgs: Org[]; mtsAuth: Awaited<ReturnType<typeof mtsAuthPublic>> }> => {
     const sql = await getSql();
     const actor = await loadActor(sql, context.userId);
     const live = await readZendesk(sql);
@@ -3037,7 +3226,7 @@ export const getIntegration = createServerFn({ method: "GET" })
     );
     let lastStatus = s(row, "last_status");
     let lastError = s(row, "last_error");
-    const supportReady = oauthReady(live) || Boolean(live.email && live.apiToken);
+    const supportReady = clientCredentialsReady(live) || Boolean(live.email && live.apiToken);
     if (!supportReady && conversations.ready) {
       if (!lastStatus || lastStatus === "not_connected" || lastStatus === "saved" || lastStatus === "error") lastStatus = "connected";
       if (lastError.includes("OAUTH_CLIENT") || lastError.includes("not connected")) lastError = "";
@@ -3054,13 +3243,16 @@ export const getIntegration = createServerFn({ method: "GET" })
       lastError,
       conversationsReady: conversations.ready,
       conversationsAppId: conversations.appId,
+      conversationsKeyId: conversations.keyId,
+      conversationsSecretSet: Boolean(conversations.secret),
       webhookReady: Boolean(conversations.webhookSecret),
       webhookId: conversations.webhookId,
-      oauthReady: oauthReady(live),
+      oauthReady: clientCredentialsReady(live),
       oauthClientId: live.oauthClientId,
       oauthFromEnv: Boolean(envZendesk().oauthClientId && envZendesk().oauthClientSecret),
       oauthSecretSet: Boolean(live.oauthClientSecret),
       orgs: orgs.map(mapOrg),
+      mtsAuth: await mtsAuthPublic(),
     };
   });
 
@@ -3114,7 +3306,7 @@ export const testIntegration = createServerFn({ method: "POST" })
     assertWrite(actor);
     const settings = await readZendesk(sql);
     const conversations = conversationsConfig();
-    if (!oauthReady(settings) && !(settings.subdomain && settings.email && settings.apiToken)) {
+    if (!clientCredentialsReady(settings) && !(settings.subdomain && settings.email && settings.apiToken)) {
       if (!conversations.ready) {
         throw new Error("Zendesk is not connected. Add the Support API token or the Conversations API key.");
       }
@@ -3130,7 +3322,7 @@ export const testIntegration = createServerFn({ method: "POST" })
       }
     }
     try {
-      if (oauthReady(settings)) {
+      if (clientCredentialsReady(settings)) {
         await zendesk(settings, "/users.json?per_page=1");
         await rememberZendesk(sql, "connected", "", false);
         await audit(sql, actor, "Tested Zendesk", settings.subdomain, "OAuth client credentials");
@@ -3156,13 +3348,14 @@ export const syncZendesk = createServerFn({ method: "POST" })
     const actor = await loadActor(sql, context.userId);
     assertWrite(actor);
     const settings = await readZendesk(sql);
-    const supportReady = oauthReady(settings) || Boolean(settings.subdomain && settings.email && settings.apiToken);
+    const supportReady = clientCredentialsReady(settings) || Boolean(settings.subdomain && settings.email && settings.apiToken);
     if (!supportReady) {
+      const published = await publishLocalToZendesk(sql);
       try {
         const result = await testConversations();
         await rememberZendesk(sql, "connected", "", true);
-        await audit(sql, actor, "Tested Zendesk", "conversations", result.name);
-        return { imported: 0 };
+        await audit(sql, actor, "Published to Zendesk", "conversations", `${published.users} people, ${published.tickets} tickets`);
+        return { imported: published.tickets, users: published.users, name: result.name };
       } catch (error) {
         const message = error instanceof Error ? error.message : "Connection failed.";
         await rememberZendesk(sql, "error", message, false);
@@ -3170,17 +3363,87 @@ export const syncZendesk = createServerFn({ method: "POST" })
       }
     }
     try {
+      const published = await publishLocalToZendesk(sql);
       const imported = await importFromZendesk(sql, actor, settings);
-      const users = await pushPortalUsers(sql);
+      const users = await importZendeskUsers(sql);
       zendeskSyncAt = Date.now();
-      if (users.failed && !users.synced) throw new Error(users.lastError);
-      return { imported, users: users.synced };
+      return { imported: imported + published.tickets, users: users + published.users };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sync failed.";
       await rememberZendesk(sql, "error", message, false);
       throw new Error(message);
     }
   });
+
+export async function publishLocalToZendesk(sql: Sql) {
+  if (!conversationsConfig().ready) return { users: 0, tickets: 0 };
+  let users = 0;
+  let tickets = 0;
+  const orgs = await sql<Row>`select id, name, domain from organizations order by id`;
+  const orgName = new Map(orgs.map((row) => [n(row, "id"), s(row, "name")]));
+  for (const org of orgs) {
+    const domain = s(org, "domain") || `company-${n(org, "id")}.managetechservice.com`;
+    await upsertConversationUser({
+      externalId: `portal-org:${n(org, "id")}`,
+      name: s(org, "name") || domain,
+      email: `desk@${domain}`,
+      company: s(org, "name"),
+    });
+    users += 1;
+  }
+  const people = await sql<Row>`
+    select email, name, organization_id from customer_users where email <> ''
+    union
+    select email, name, organization_id from shop_customers where email <> ''
+  `;
+  const remoteIds = new Map<string, string>();
+  for (const person of people) {
+    const email = s(person, "email").toLowerCase();
+    const company = orgName.get(n(person, "organization_id")) || "Manage Tech Service";
+    const remoteId = await upsertConversationUser({
+      externalId: `portal:${email}`,
+      name: s(person, "name") || email,
+      email,
+      company,
+    });
+    remoteIds.set(email, remoteId);
+    await sql`update customer_users set zendesk_user_id = ${remoteId} where lower(email) = ${email}`;
+    await sql`update shop_customers set zendesk_user_id = ${remoteId} where lower(email) = ${email}`;
+    users += 1;
+  }
+  const openTickets = await sql<Row>`
+    select t.id, t.subject, t.category, t.requester_name, t.requester_email, t.zendesk_id, t.organization_id,
+      coalesce((select c.body from ticket_comments c where c.ticket_id = t.id and c.public_note = true order by c.id limit 1), t.subject) as body
+    from tickets t
+    where coalesce(t.zendesk_id, '') not like 'sc:%'
+    order by t.id
+  `;
+  for (const ticket of openTickets) {
+    const email = s(ticket, "requester_email").toLowerCase();
+    if (!email) continue;
+    let remoteId = remoteIds.get(email) || "";
+    if (!remoteId) {
+      remoteId = await upsertConversationUser({
+        externalId: `portal:${email}`,
+        name: s(ticket, "requester_name") || email,
+        email,
+        company: orgName.get(n(ticket, "organization_id")) || "Manage Tech Service",
+      });
+      remoteIds.set(email, remoteId);
+    }
+    const conversationId = await ensureConversationRecord({
+      userId: remoteId,
+      title: s(ticket, "subject") || `Ticket ${n(ticket, "id")}`,
+      description: `${s(ticket, "category") || "Support"} · ${orgName.get(n(ticket, "organization_id")) || "Manage Tech Service"}`,
+      body: s(ticket, "body"),
+      company: orgName.get(n(ticket, "organization_id")) || "Manage Tech Service",
+      kind: "ticket",
+    });
+    await sql`update tickets set zendesk_id = ${`sc:${conversationId}`} where id = ${n(ticket, "id")}`;
+    tickets += 1;
+  }
+  return { users, tickets };
+}
 
 async function pushPortalUsers(sql: Sql) {
   const staff = await sql<Row>`select user_id, name, email from portal_staff where email <> ''`;
@@ -3908,31 +4171,10 @@ async function shopOrders(sql: Sql, customerId: number, email: string): Promise<
 
 export const shopRegister = createServerFn({ method: "POST" })
   .validator((input: unknown) => shopCredentials(input, true))
-  .handler(async ({ data }) => {
-    const sql = await getSql();
-    const existing = await sql<Row>`select id from shop_customers where email = ${data.email}`;
-    if (existing[0]) throw new Error("An account with that email already exists. Sign in instead.");
-    const token = await newShopToken();
-    await sql`
-      insert into shop_customers (email, name, password_hash, session_token, session_expires, role_id, grant_shop, grant_services, grant_invoice)
-      values (${data.email}, ${data.name}, ${await hashShopPassword(data.password)}, ${token}, now() + interval '400 days', 'regular', false, false, false)
-    `;
-    const shopOrg = await sql<Row>`select id from organizations where domain = 'shop.managetech.example' limit 1`;
-    await openWelcomeTicket(sql, {
-      name: data.name,
-      email: data.email,
-      organizationId: shopOrg[0] ? n(shopOrg[0], "id") : null,
-      source: "Online shop account",
-      detail: "Customer created an account.",
-      actorName: "Online shop",
-    }).catch(() => undefined);
-    await upsertZendeskUser(sql, { name: data.name, email: data.email, kind: "shop" })
-      .then(async (zendeskUserId) => {
-        if (zendeskUserId) await sql`update shop_customers set zendesk_user_id = ${zendeskUserId} where email = ${data.email}`;
-      })
-      .catch(() => undefined);
-    return { token, email: data.email, name: data.name };
+  .handler(async () => {
+    throw new Error("This portal is invite only. An MTS admin adds the person in Zendesk, and that email can then sign in.");
   });
+
 
 export const shopLogin = createServerFn({ method: "POST" })
   .validator((input: unknown) => shopCredentials(input, false))
@@ -3940,7 +4182,18 @@ export const shopLogin = createServerFn({ method: "POST" })
     const sql = await getSql();
     const rows = await sql<Row>`select * from shop_customers where email = ${data.email}`;
     const row = rows[0];
-    if (!row || !(await shopPasswordMatches(data.password, s(row, "password_hash")))) {
+    if (!row) {
+      const remote = await lookupZendeskEndUser(sql, data.email).catch(() => null);
+      if (remote) {
+        await acceptZendeskDirectoryUser(sql, remote);
+        throw new Error("This email is invited from Zendesk. Sign in from the portal login with that same email.");
+      }
+      throw new Error("This portal is invite only. Ask MTS to add this email in Zendesk.");
+    }
+    if (!(await shopPasswordMatches(data.password, s(row, "password_hash")))) {
+      if (s(row, "zendesk_user_id")) {
+        throw new Error("This email is invited from Zendesk. Sign in from the portal login with that same email.");
+      }
       throw new Error("Email or password is wrong.");
     }
     if (!b(row, "email_verified")) throw new Error("Verify your email before signing in.");
@@ -4253,15 +4506,13 @@ export const orderPortalService = createServerFn({ method: "POST" })
     if (item.group === "it" && !access.canOrderIt) throw new Error("This account cannot order IT services.");
     if (item.group === "phone" && !access.canOrderPhone) throw new Error("This account cannot order phone or internet services.");
     if (!access.canDefer) throw new Error("This account cannot take an invoice. Pay-later services are turned off.");
-    const orgs = await sql<Row>`select id from organizations where domain = 'shop.managetech.example' limit 1`;
-    const org = orgs[0];
-    if (!org) throw new Error("The service desk is not ready to take orders.");
+    const organizationId = nid(row, "organization_id") ?? (await ensureDeskOrganization(sql));
     const inserted = await sql<Row>`
       insert into orders (
         organization_id, shop_customer_id, status, notes, approval_note, payment_method, payment_status,
         ship_name, ship_email, ship_phone, shipping_method, shipment_status
       ) values (
-        ${n(org, "id")}, ${n(row, "id")}, 'pending', ${data.notes}, 'Service ordered from the customer portal.',
+        ${organizationId}, ${n(row, "id")}, 'pending', ${data.notes}, 'Service ordered from the customer portal.',
         'invoice', 'pay_later', ${s(row, "name")}, ${s(row, "email")}, ${s(row, "phone")}, 'standard', 'unfulfilled'
       )
       returning id
@@ -4322,52 +4573,10 @@ export const portalRegister = createServerFn({ method: "POST" })
     if (!phone) throw new Error("Enter a phone number.");
     return { ...creds, business, phone, interests };
   })
-  .handler(async ({ data }) => {
-    const sql = await getSql();
-    const existing = await sql<Row>`select id from shop_customers where email = ${data.email}`;
-    if (existing[0]) throw new Error("An account with that email already exists. Sign in instead.");
-    const domain = data.email.split("@")[1] || "";
-    const shared = ["gmail.com", "yahoo.com", "outlook.com", "hotmail.com", "icloud.com"].includes(domain);
-    let organizationId: number | null = null;
-    if (!shared && domain) {
-      const found = await sql<Row>`select id from organizations where lower(domain) = ${domain} limit 1`;
-      if (found[0]) organizationId = n(found[0], "id");
-    }
-    if (!organizationId) {
-      const created = await sql<Row>`
-        insert into organizations (name, domain, phone, industry, portal_access, ordering_enabled, notes)
-        values (${data.business}, ${shared ? "" : domain}, ${data.phone}, ${data.interests.join(", ")}, true, false, 'Created from the customer portal. Shopping and invoicing stay off until an admin approves them.')
-        returning id
-      `;
-      organizationId = n(created[0], "id");
-    }
-    const code = String(Math.floor(100000 + Math.random() * 900000));
-    await sql`
-      insert into shop_customers (
-        email, name, password_hash, phone, business_name, organization_id, role_id,
-        email_verified, verify_code, verify_expires, interests, grant_shop, grant_services, grant_invoice, pay_later
-      ) values (
-        ${data.email}, ${data.name}, ${await hashShopPassword(data.password)}, ${data.phone}, ${data.business}, ${organizationId}, 'regular',
-        false, ${code}, now() + interval '30 minutes', ${data.interests.join(", ")}, false, false, false, false
-      )
-    `;
-    const mail = await resolveMail(sql);
-    let mailed = false;
-    if (mail.key && mail.from) {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: { Authorization: `Bearer ${mail.key}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          from: mail.from,
-          to: [data.email],
-          subject: "Verify your Manage Tech Service portal",
-          text: `Your verification code is ${code}. It expires in 30 minutes. This account starts as support only. An admin approves shop, services, and invoicing.`,
-        }),
-      });
-      mailed = response.ok;
-    }
-    return { email: data.email, mailed, demoCode: mailed ? "" : code };
+  .handler(async () => {
+    throw new Error("This portal is invite only. An MTS admin adds the person in Zendesk, and that email can then sign in.");
   });
+
 
 export const portalVerify = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -4749,6 +4958,38 @@ const ORDER_OFFERINGS = {
   wiring: { name: "Wiring drop", category: "Wiring" },
 } as const;
 
+export const orderCatalogService = createServerFn({ method: "POST" })
+  .validator((input: unknown) => {
+    const raw = obj(input);
+    const token = str(raw.token, 80);
+    const name = str(raw.name, 180);
+    const site = str(raw.site, 200);
+    const notes = str(raw.notes, 1000);
+    if (!token) throw new Error("Sign in again.");
+    if (!name) throw new Error("Choose a service.");
+    return { token, name, site, notes };
+  })
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    const { row } = await requirePortal(sql, data.token);
+    const organizationId = nid(row, "organization_id") ?? (await ensureDeskOrganization(sql));
+    const inserted = await sql<Row>`
+      insert into tickets (subject, status, priority, category, organization_id, requester_name, requester_email, tags, view_label)
+      values (
+        ${data.name}, 'new', 'normal', 'Service', ${organizationId}, ${s(row, "name")}, ${s(row, "email")},
+        'portal,service', 'zendesk'
+      )
+      returning id
+    `;
+    const id = n(inserted[0], "id");
+    const body = [data.name, data.site, data.notes].filter(Boolean).join("\n");
+    await sql`
+      insert into ticket_comments (ticket_id, author_name, body, public_note)
+      values (${id}, ${s(row, "name") || "Customer"}, ${body}, true)
+    `;
+    return { id };
+  });
+
 export const orderPortalOffering = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     const raw = obj(input);
@@ -5099,9 +5340,6 @@ export const placeStorefrontOrder = createServerFn({ method: "POST" })
   })
   .handler(async ({ data }) => {
     const sql = await getSql();
-    const orgs = await sql<Row>`select id from organizations where domain = 'shop.managetech.example' limit 1`;
-    const org = orgs[0];
-    if (!org) throw new Error("The online shop is not ready to take orders.");
     const signedIn = await shopByToken(sql, data.token);
     if (!signedIn || s(signedIn, "email") !== data.email) {
       throw new Error("Sign in to the customer portal with the same email before placing an order.");
@@ -5140,7 +5378,7 @@ export const placeStorefrontOrder = createServerFn({ method: "POST" })
           returning id
         `;
         customerId = n(insertedCustomer[0], "id");
-        const shopOrgId = n(org, "id");
+        const shopOrgId = nid(signedIn, "organization_id") ?? (await ensureDeskOrganization(sql));
         await openWelcomeTicket(sql, {
           name: data.name,
           email: data.email,
@@ -5161,13 +5399,14 @@ export const placeStorefrontOrder = createServerFn({ method: "POST" })
       if (byEmail[0]) customerId = n(byEmail[0], "id");
     }
     const note = [data.company, data.notes].filter(Boolean).join(" · ");
+    const organizationId = nid(signedIn, "organization_id") ?? (await ensureDeskOrganization(sql));
     const inserted = await sql<Row>`
       insert into orders (
         organization_id, customer_user_id, shop_customer_id, status, notes, approval_note, payment_method,
         ship_name, ship_email, ship_phone, ship_address, ship_city, ship_region, ship_postal, ship_country,
         shipping_method, shipping_cents, shipment_status
       ) values (
-        ${n(org, "id")}, null, ${customerId}, 'pending', ${note}, 'Placed from the online shop.', ${method},
+        ${organizationId}, null, ${customerId}, 'pending', ${note}, 'Placed from the online shop.', ${method},
         ${data.name}, ${data.email}, ${data.phone}, ${data.address}, ${data.city}, ${data.region}, ${data.postal}, ${data.country},
         ${shipping.method}, ${shipping.cents}, 'unfulfilled'
       )
@@ -5193,7 +5432,7 @@ export const placeStorefrontOrder = createServerFn({ method: "POST" })
     await filePortalTicket(sql, {
       name: data.name,
       email: data.email,
-      organizationId: signedIn ? nid(signedIn, "organization_id") : n(org, "id"),
+      organizationId,
       subject: `Shop order MT-${1000 + id}`,
       category: "Hardware & Software",
       body: `${data.name} placed ${data.items.map((item) => `${item.quantity} × ${item.sku}`).join(", ")} from the online shop.`,

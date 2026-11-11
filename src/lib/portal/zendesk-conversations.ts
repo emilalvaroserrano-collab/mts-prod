@@ -14,19 +14,31 @@ function env(name: string) {
 }
 
 const shopConversations = {
-  appId: "6adbdfeb9640f475f3c2c397",
-  keyId: "int_6adbe90fa5a8c8bbff50af30",
-  secret: "RdUkfXMUQM32Ia6ELDudEa9AJGUDByYPwtMi1SJFLHwocMkZEy7h8QwG9fh0vDVRX1-UjtdYehJp7x9OGgOBbw",
+  appId: "6af379dcb61f6ac20d1e3df8",
+  keyId: "app_6af39b614c735f82a19f2d89",
+  secret: "1g2UxuNik3Jzg0gfmN7B3hgEhvGa1TCvylM5VeGKko7ZOW9MQYASKwdorkzAdY-0nJvZ3gltgP9h7NpnIO6N_Q",
   webhookId: "6adbe8f8d129a41d7be7b1ac",
   webhookSecret: "c8Y3p8P21pGmi6pkC4C7OiOsNZwpuFrtU2_XxnEFnUaDFoJY7UdU5YNTLDLB-JzqvIEgzDDGrUGsBqqEc3ApqA",
 };
 
+let portalConversations: Partial<ConversationsConfig> = {};
+
+export function useStoredConversations(input: Partial<ConversationsConfig>) {
+  portalConversations = {
+    appId: input.appId || "",
+    keyId: input.keyId || "",
+    secret: input.secret || "",
+    webhookId: input.webhookId || "",
+    webhookSecret: input.webhookSecret || "",
+  };
+}
+
 export function conversationsConfig(): ConversationsConfig {
-  const appId = env("ZENDESK_CONVERSATIONS_APP_ID") || env("ZENDESK_APP_ID") || shopConversations.appId;
-  const keyId = env("ZENDESK_CONVERSATIONS_KEY_ID") || env("ZENDESK_KEY_ID") || shopConversations.keyId;
+  const appId = env("ZENDESK_CONVERSATIONS_APP_ID") || shopConversations.appId;
+  const keyId = env("ZENDESK_CONVERSATIONS_KEY_ID") || shopConversations.keyId;
   const secret = env("ZENDESK_CONVERSATIONS_SECRET") || env("ZENDESK_CONVERSATIONS_SECRET_KEY") || shopConversations.secret;
-  const webhookId = env("ZENDESK_WEBHOOK_ID") || shopConversations.webhookId;
-  const webhookSecret = env("ZENDESK_WEBHOOK_SECRET") || shopConversations.webhookSecret;
+  const webhookId = env("ZENDESK_WEBHOOK_ID") || portalConversations.webhookId || shopConversations.webhookId;
+  const webhookSecret = env("ZENDESK_WEBHOOK_SECRET") || portalConversations.webhookSecret || shopConversations.webhookSecret;
   return { appId, keyId, secret, webhookId, webhookSecret, ready: Boolean(appId && keyId && secret) };
 }
 
@@ -156,4 +168,69 @@ export async function ingestZendeskWebhook(sql: Sql, payload: unknown) {
     if (ok) stored += 1;
   }
   return stored;
+}
+
+type RemoteUser = { id?: string; externalId?: string };
+type RemoteConversation = { id?: string; displayName?: string };
+
+async function conversationsFetch(path: string, method = "GET", payload?: unknown) {
+  const config = conversationsConfig();
+  if (!config.ready) throw new Error("Zendesk Conversations is not connected.");
+  const response = await fetch(`https://mts-portal.zendesk.com/sc/v2/apps/${encodeURIComponent(config.appId)}${path}`, {
+    method,
+    headers: {
+      Authorization: authHeader(config),
+      Accept: "application/json",
+      ...(payload ? { "Content-Type": "application/json" } : {}),
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  const text = await response.text();
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new Error(text.replaceAll(config.secret, "").slice(0, 180) || "Zendesk rejected the record.");
+  }
+  return text ? (JSON.parse(text) as Record<string, unknown>) : {};
+}
+
+export async function upsertConversationUser(input: { externalId: string; name: string; email: string; company?: string }) {
+  const found = await conversationsFetch(`/users/${encodeURIComponent(input.externalId)}`);
+  const existing = found && typeof found.user === "object" ? (found.user as RemoteUser) : null;
+  if (existing?.id) return existing.id;
+  const parts = input.name.trim().split(/\s+/);
+  const created = await conversationsFetch("/users", "POST", {
+    externalId: input.externalId,
+    profile: {
+      givenName: parts[0] || input.email,
+      surname: parts.slice(1).join(" "),
+      email: input.email,
+    },
+    metadata: { company: input.company || "", source: "mts-portal" },
+  });
+  const user = created && typeof created.user === "object" ? (created.user as RemoteUser) : null;
+  if (!user?.id) throw new Error("Zendesk did not return a user id.");
+  return user.id;
+}
+
+export async function ensureConversationRecord(input: { userId: string; title: string; description: string; body: string; company: string; kind: string }) {
+  const listed = await conversationsFetch(`/conversations?filter[userId]=${encodeURIComponent(input.userId)}&page[size]=50`);
+  const conversations = listed && Array.isArray(listed.conversations) ? (listed.conversations as RemoteConversation[]) : [];
+  const match = conversations.find((item) => item.displayName === input.title && item.id);
+  if (match?.id) return match.id;
+  const created = await conversationsFetch("/conversations", "POST", {
+    type: "personal",
+    participants: [{ userId: input.userId }],
+    displayName: input.title.slice(0, 180),
+    description: input.description.slice(0, 240),
+    metadata: { portal: input.kind, company: input.company, source: "mts-portal" },
+  });
+  const conversation = created && typeof created.conversation === "object" ? (created.conversation as RemoteConversation) : null;
+  if (!conversation?.id) throw new Error("Zendesk did not return a conversation id.");
+  if (input.body.trim()) {
+    await conversationsFetch(`/conversations/${encodeURIComponent(conversation.id)}/messages`, "POST", {
+      author: { type: "user", userId: input.userId },
+      content: { type: "text", text: input.body.slice(0, 4000) },
+    });
+  }
+  return conversation.id;
 }

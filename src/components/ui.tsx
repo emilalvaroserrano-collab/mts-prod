@@ -263,7 +263,7 @@ export function Empty({ title, body }: { title: string; body: string }) {
 
 export function Boot() {
   return (
-    <div className="grid min-h-screen place-items-center bg-bg px-6">
+    <div className="grid min-h-screen place-items-center px-6">
       <div className="text-center">
         <p className="text-sm font-semibold text-ink">Manage Tech Service</p>
         <p className="mt-1 text-[13px] text-muted">Opening admin</p>

@@ -84,7 +84,7 @@ function useAuthPopup(): boolean {
 /** Where Google and Microsoft should return the browser after sign-in. */
 export function authReturnUrl() {
   if (typeof window !== "undefined" && window.location.hostname === PUBLIC_APP_HOST) return PUBLIC_LOGIN_URL;
-  return "/login";
+  return "/upgrade";
 }
 
 /** Message the popup posts back to the opener once sign-in completes. */
@@ -109,7 +109,7 @@ export async function signIn(
   opts: { callbackURL?: string; errorCallbackURL?: string } = {},
 ): Promise<void> {
   const callbackURL = opts.callbackURL ?? "/portal";
-  const errorCallbackURL = opts.errorCallbackURL ?? "/login";
+  const errorCallbackURL = opts.errorCallbackURL ?? "/upgrade";
 
   // Open the popup SYNCHRONOUSLY on the user gesture — before any await
   // (including signOut). Awaiting first drops user-gesture privilege in some

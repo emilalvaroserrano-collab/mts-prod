@@ -3,7 +3,8 @@
 @theme {
   --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Montserrat", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Roboto Mono", ui-monospace, monospace;
+  --font-portal: "Roboto", ui-sans-serif, system-ui, sans-serif;
 
   --color-bg: #f3f7f8;
   --color-surface: #ffffff;
@@ -54,7 +55,13 @@
     overflow-y: auto;
     overscroll-behavior: auto;
     -webkit-overflow-scrolling: touch;
-    background: var(--color-bg);
+    background:
+      radial-gradient(68rem 36rem at -5% -8%, rgba(18, 126, 134, 0.34), transparent 58%),
+      radial-gradient(54rem 32rem at 108% 0%, rgba(0, 91, 180, 0.2), transparent 54%),
+      radial-gradient(40rem 26rem at 78% 108%, rgba(212, 168, 92, 0.22), transparent 52%),
+      radial-gradient(34rem 22rem at 12% 100%, rgba(28, 158, 166, 0.18), transparent 56%),
+      linear-gradient(155deg, #e8f4f5 0%, #eef3f8 46%, #f3efe6 100%);
+    background-attachment: fixed;
     color: var(--color-ink);
     font-family: var(--font-sans);
     font-weight: 400;
@@ -73,6 +80,45 @@
     outline-offset: 1px;
   }
 }
+
+@keyframes login-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(6%, -4%, 0) scale(1.08); }
+}
+
+.login-orb {
+  animation: login-drift 32s ease-in-out infinite;
+}
+
+.login-orb-late {
+  animation-delay: -14s;
+}
+
+@keyframes upgrade-blink {
+  0%, 42% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+@keyframes upgrade-scan {
+  0% { transform: translateY(-30%); }
+  100% { transform: translateY(110vh); }
+}
+
+@keyframes upgrade-sweep {
+  0% { transform: translateX(-70%); }
+  100% { transform: translateX(180%); }
+}
+
+@keyframes upgrade-caret {
+  0%, 45% { opacity: 1; }
+  55%, 100% { opacity: 0; }
+}
+
+.upgrade-blink { animation: upgrade-blink 1.15s steps(1, end) infinite; }
+.upgrade-scan { animation: upgrade-scan 3.6s linear infinite; }
+.upgrade-sweep { animation: upgrade-sweep 1.8s ease-in-out infinite; }
+.upgrade-caret { animation: upgrade-caret 0.9s steps(1, end) infinite; }
+.upgrade-blink-late { animation-delay: 0.35s; }
 
 @keyframes mts-bar {
   0%, 100% { transform: scaleY(0.28); }
@@ -144,32 +190,62 @@
 .portal-stage {
   position: relative;
   isolation: isolate;
+  font-family: var(--font-portal);
+  background: transparent;
 }
 
-.portal-stage::before {
-  content: "";
+.portal-waves {
   position: fixed;
-  inset: -8%;
-  z-index: 0;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
   pointer-events: none;
-  background:
-    radial-gradient(36rem 28rem at 12% 0%, rgba(18, 126, 134, 0.18), transparent 62%),
-    radial-gradient(32rem 26rem at 100% 10%, rgba(0, 57, 112, 0.12), transparent 58%),
-    radial-gradient(28rem 24rem at 70% 100%, rgba(28, 158, 166, 0.12), transparent 60%);
-  animation: portal-drift 26s ease-in-out infinite alternate;
 }
 
-@keyframes portal-drift {
-  from { transform: translate3d(0, 0, 0) scale(1); }
-  to { transform: translate3d(-1.5%, 1%, 0) scale(1.05); }
+.portal-wave {
+  position: absolute;
+  left: 0;
+  width: 200%;
+  height: 32vh;
+  color: rgba(18, 126, 134, 0.2);
+  will-change: transform;
 }
 
-@media (max-width: 767px) {
-  .portal-stage::before { animation: none; }
+.portal-wave-back {
+  bottom: -6vh;
+  height: 38vh;
+  color: rgba(0, 57, 112, 0.1);
+  animation: portal-wave 46s linear infinite;
+}
+
+.portal-wave-front {
+  bottom: -8vh;
+  height: 28vh;
+  color: rgba(18, 126, 134, 0.16);
+  animation: portal-wave 62s linear infinite reverse;
+}
+
+.portal-wave-top {
+  top: -10vh;
+  height: 24vh;
+  color: rgba(212, 168, 92, 0.16);
+  animation: portal-wave-flip 72s linear infinite;
+}
+
+@keyframes portal-wave {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+
+@keyframes portal-wave-flip {
+  from { transform: translate3d(0, 0, 0) scaleY(-1); }
+  to { transform: translate3d(-50%, 0, 0) scaleY(-1); }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .portal-stage::before { animation: none; }
+  .portal-wave-back,
+  .portal-wave-front,
+  .portal-wave-top { animation: none; }
 }
 
 .shop-press {
@@ -178,10 +254,11 @@
 .shop-press:active { transform: scale(0.98); }
 
 .shop-card {
+  box-shadow: 0 8px 24px rgba(0, 57, 112, 0.08);
   transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1), box-shadow 320ms ease;
 }
 @media (hover: hover) {
-  .shop-card:hover { transform: translateY(-4px); box-shadow: 0 16px 40px rgba(0, 57, 112, 0.08); }
+  .shop-card:hover { transform: translateY(-4px); box-shadow: 0 16px 36px rgba(0, 57, 112, 0.12); }
 }
 
 .admin-main {

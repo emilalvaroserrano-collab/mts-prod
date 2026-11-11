@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { Bell, ClipboardList, Headphones, House, LogOut, Menu, Receipt, Settings, X } from "lucide-react";
+import { Bell, ClipboardList, Headphones, House, LayoutDashboard, LogOut, Menu, Receipt, Settings, X } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
@@ -43,7 +43,18 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
 
   return (
-    <div className="portal-stage grid min-h-dvh grid-rows-[auto_minmax(0,1fr)] bg-bg text-ink">
+    <div className="portal-stage grid min-h-dvh grid-rows-[auto_minmax(0,1fr)] text-ink">
+      <div className="portal-waves" aria-hidden="true">
+        <svg className="portal-wave portal-wave-top" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0 180C240 120 480 240 720 180C960 120 1200 240 1440 180C1680 120 1920 240 2160 180C2400 120 2640 240 2880 180V320H0Z" />
+        </svg>
+        <svg className="portal-wave portal-wave-back" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0 160C180 220 360 100 540 160C720 220 900 100 1080 160C1260 220 1440 100 1620 160C1800 220 1980 100 2160 160C2340 220 2520 100 2700 160C2790 190 2835 175 2880 160V320H0Z" />
+        </svg>
+        <svg className="portal-wave portal-wave-front" viewBox="0 0 2880 320" preserveAspectRatio="none">
+          <path fill="currentColor" d="M0 200C240 140 480 250 720 200C960 150 1200 250 1440 200C1680 150 1920 250 2160 200C2400 150 2640 250 2880 200V320H0Z" />
+        </svg>
+      </div>
       <header className="fixed inset-x-0 top-0 z-30 border-b border-line bg-surface/95 backdrop-blur md:sticky" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="mx-auto grid h-14 w-full max-w-6xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 md:h-16 md:gap-3 md:px-8">
           <Link to="/portal" className="flex min-w-0 items-center gap-2 md:hidden">
@@ -59,6 +70,11 @@ export function PortalShell({ children }: { children: ReactNode }) {
                 </Link>
               );
             })}
+            {home.data?.desk ? (
+              <a href="/dashboard" className="hidden shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-accent md:inline">
+                Admin
+              </a>
+            ) : null}
           </nav>
           <div className="col-start-3 flex shrink-0 items-center justify-end">
             <Link to="/portal/shop" className="relative hidden size-11 place-items-center rounded-xl md:grid" aria-label="Order">
@@ -67,11 +83,15 @@ export function PortalShell({ children }: { children: ReactNode }) {
             </Link>
             <Link to="/portal/notifications" data-guide="notifications" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Notifications"><Bell className="size-5" /></Link>
             <SarahHeaderButton />
-            {home.data?.destination === "admin" ? <a href="/" className="hidden px-2 text-xs font-semibold text-accent md:inline">Admin</a> : null}
+            {home.data?.desk ? (
+              <a href="/dashboard" className="grid size-10 place-items-center rounded-xl text-accent md:hidden" aria-label="Admin">
+                <LayoutDashboard className="size-5" />
+              </a>
+            ) : null}
             <button type="button" className="grid size-10 place-items-center rounded-xl md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
               <Menu className="size-5" />
             </button>
-            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut("/login"); }}>
+            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut("/upgrade"); }}>
               <LogOut className="size-5" />
             </button>
           </div>
@@ -94,7 +114,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
               <Link key={item.to} to={item.to} data-guide={item.guide} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">{item.label}</Link>
             ))}
             <Link to="/portal/notifications" onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">Notifications</Link>
-            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut("/login"); }}>Sign out</button>
+            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut("/upgrade"); }}>Sign out</button>
           </div>
         </div>
       ) : null}

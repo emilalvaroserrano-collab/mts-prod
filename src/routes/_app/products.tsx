@@ -331,7 +331,7 @@ function ProductsPage() {
           if (file) void onSpreadsheet(file);
         }}
       />
-      <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+      <div className="grid gap-3 rounded-2xl border border-white/70 bg-surface/80 p-3 shadow-[0_10px_30px_rgba(0,57,112,0.05)] backdrop-blur sm:p-4 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
         <div className="flex gap-2 overflow-x-auto pb-1">
           {["All", ...CATEGORIES].map((item) => (
             <button
@@ -340,8 +340,8 @@ function ProductsPage() {
               onClick={() => setCategory(item)}
               className={
                 category === item
-                  ? "h-9 shrink-0 rounded-lg bg-ink px-3 text-[13px] font-semibold text-white"
-                  : "h-9 shrink-0 rounded-lg border border-line bg-surface px-3 text-[13px] font-medium text-ink"
+                  ? "h-9 shrink-0 rounded-full bg-ink px-3.5 text-[13px] font-semibold text-white"
+                  : "h-9 shrink-0 rounded-full bg-surface-2 px-3.5 text-[13px] font-medium text-ink hover:bg-accent-soft"
               }
             >
               {item}
@@ -354,15 +354,15 @@ function ProductsPage() {
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search products"
             aria-label="Search products"
-            className="h-9 sm:w-56"
+            className="h-10 rounded-full sm:w-56"
           />
-          <div className="flex shrink-0 rounded-lg border border-line bg-surface p-0.5" role="group" aria-label="Catalog view">
+          <div className="flex shrink-0 rounded-full bg-surface-2 p-1" role="group" aria-label="Catalog view">
             <button
               type="button"
               aria-pressed={view === "grid"}
               aria-label="Grid view"
               onClick={() => chooseView("grid")}
-              className={view === "grid" ? "grid size-8 place-items-center rounded-md bg-ink text-white" : "grid size-8 place-items-center rounded-md text-muted"}
+              className={view === "grid" ? "grid size-8 place-items-center rounded-full bg-white text-ink shadow-sm" : "grid size-8 place-items-center rounded-full text-muted"}
             >
               <LayoutGrid className="size-4" />
             </button>
@@ -371,14 +371,18 @@ function ProductsPage() {
               aria-pressed={view === "list"}
               aria-label="List view"
               onClick={() => chooseView("list")}
-              className={view === "list" ? "grid size-8 place-items-center rounded-md bg-ink text-white" : "grid size-8 place-items-center rounded-md text-muted"}
+              className={view === "list" ? "grid size-8 place-items-center rounded-full bg-white text-ink shadow-sm" : "grid size-8 place-items-center rounded-full text-muted"}
             >
               <List className="size-4" />
             </button>
           </div>
         </div>
       </div>
-      {shown.length === 0 ? <p className="text-sm text-muted">No products match this view.</p> : null}
+      {shown.length === 0 ? (
+        <div className="grid min-h-40 place-items-center rounded-2xl border border-dashed border-line bg-surface/70 px-6 text-center text-sm text-muted">
+          No products match this view.
+        </div>
+      ) : null}
       {view === "grid" ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {shown.map((product) => {
@@ -388,25 +392,28 @@ function ProductsPage() {
                 key={product.id}
                 type="button"
                 onClick={() => open(product)}
-                className="overflow-hidden rounded-xl border border-line bg-surface text-left shadow-[0_1px_0_rgba(0,0,0,0.04)] hover:border-line-strong"
+                className="group grid overflow-hidden rounded-2xl border border-white/80 bg-surface text-left shadow-[0_8px_24px_rgba(0,57,112,0.08)] transition duration-200 hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(0,57,112,0.12)]"
               >
-                <div className="grid aspect-[4/3] place-items-center bg-[#f5f5f7] p-6">
+                <div className="relative flex aspect-[4/3] items-center justify-center overflow-hidden bg-[linear-gradient(180deg,#f7fbfb_0%,#e7f3f4_100%)]">
                   {product.imageUrl ? (
-                    <img src={product.imageUrl} alt="" className="h-full w-full object-contain" />
+                    <img src={product.imageUrl} alt="" className="max-h-[86%] max-w-[86%] object-contain object-center" />
                   ) : (
-                    <Icon className="size-16 text-ink/80" strokeWidth={1.25} />
+                    <Icon className="size-16 text-accent" strokeWidth={1.25} />
                   )}
-                </div>
-                <div className="px-5 py-5">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-medium text-muted">{product.category}</p>
+                  <span className="absolute left-3 top-3">
                     <Badge tone={product.available ? "good" : "neutral"}>{product.available ? "Active" : "Draft"}</Badge>
+                  </span>
+                </div>
+                <div className="grid gap-2 px-4 py-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-accent">{product.category}</p>
+                    <p className="font-mono text-[11px] text-subtle">{product.sku}</p>
                   </div>
-                  <p className="mt-1 text-xl font-medium tracking-tight">{product.name}</p>
-                  <p className="mt-1 line-clamp-2 text-sm text-muted">{product.description || product.specs}</p>
-                  <div className="mt-4 flex items-baseline justify-between gap-3">
-                    <p className="text-lg font-medium tracking-tight">{money(product.priceCents)}</p>
-                    <p className="text-xs text-subtle">{product.stock} in stock</p>
+                  <p className="line-clamp-2 text-base font-semibold tracking-tight">{product.name}</p>
+                  <p className="line-clamp-2 min-h-10 text-sm leading-5 text-muted">{product.description || product.specs || "No description yet."}</p>
+                  <div className="mt-1 flex items-end justify-between gap-3 border-t border-line/80 pt-3">
+                    <p className="text-lg font-semibold tracking-tight">{money(product.priceCents)}</p>
+                    <p className="rounded-full bg-surface-2 px-2.5 py-1 text-xs font-medium text-ink">{product.stock} in stock</p>
                   </div>
                 </div>
               </button>
@@ -414,39 +421,29 @@ function ProductsPage() {
           })}
         </div>
       ) : (
-        <div className="stack-wrap overflow-x-auto rounded-xl border border-line bg-surface">
-          <table className="stack-table w-full min-w-[40rem] text-left text-sm">
-            <thead className="text-xs text-muted">
-              <tr>
-                <th className="px-4 py-3 font-medium">Product</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Inventory</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 text-right font-medium">Price</th>
-              </tr>
-            </thead>
-            <tbody>
-              {shown.map((product) => (
-                <tr key={product.id} className="border-t border-line">
-                  <td className="px-4 py-3">
-                    <button type="button" onClick={() => open(product)} className="flex items-center gap-3 text-left">
-                      <ProductThumb product={product} />
-                      <span>
-                        <span className="block font-medium">{product.name}</span>
-                        <span className="block text-xs text-muted">{product.sku}</span>
-                      </span>
-                    </button>
-                  </td>
-                  <td className="px-4 py-3" data-label="Status">
-                    <Badge tone={product.available ? "good" : "neutral"}>{product.available ? "Active" : "Draft"}</Badge>
-                  </td>
-                  <td className="px-4 py-3 tabular-nums" data-label="Inventory">{product.stock} in stock</td>
-                  <td className="px-4 py-3 text-muted" data-label="Category">{product.category}</td>
-                  <td className="px-4 py-3 text-right font-medium tabular-nums" data-label="Price">{money(product.priceCents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="grid gap-2">
+          {shown.map((product) => (
+            <button
+              key={product.id}
+              type="button"
+              onClick={() => open(product)}
+              className="grid grid-cols-1 items-center gap-3 rounded-2xl border border-white/80 bg-surface p-3 text-left shadow-[0_8px_24px_rgba(0,57,112,0.08)] transition hover:-translate-y-0.5 hover:shadow-[0_16px_36px_rgba(0,57,112,0.12)] sm:grid-cols-[minmax(0,1.4fr)_auto_auto_auto] sm:gap-4 sm:px-4"
+            >
+              <span className="flex min-w-0 items-center gap-3">
+                <ProductThumb product={product} />
+                <span className="min-w-0">
+                  <span className="block truncate font-semibold tracking-tight">{product.name}</span>
+                  <span className="block truncate font-mono text-xs text-subtle">{product.sku}</span>
+                </span>
+              </span>
+              <Badge tone={product.available ? "good" : "neutral"}>{product.available ? "Active" : "Draft"}</Badge>
+              <span className="text-sm text-muted">{product.category}</span>
+              <span className="flex items-center justify-between gap-4 sm:justify-end">
+                <span className="text-xs text-subtle">{product.stock} in stock</span>
+                <span className="font-semibold tabular-nums">{money(product.priceCents)}</span>
+              </span>
+            </button>
+          ))}
         </div>
       )}
     </div>
@@ -456,8 +453,8 @@ function ProductsPage() {
 function ProductThumb({ product }: { product: Product }) {
   const Icon = ICONS[product.category] ?? Monitor;
   return (
-    <span className="grid size-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-[#f5f5f7]">
-      {product.imageUrl ? <img src={product.imageUrl} alt="" className="size-full object-contain" /> : <Icon className="size-4 text-ink" />}
+    <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-[linear-gradient(180deg,#f7fbfb_0%,#e7f3f4_100%)]">
+      {product.imageUrl ? <img src={product.imageUrl} alt="" className="h-full w-full object-contain object-center p-1.5" /> : <Icon className="size-5 text-accent" />}
     </span>
   );
 }
