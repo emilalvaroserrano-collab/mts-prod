@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { getPortalTicket, refreshPortalTicket, replyPortalTicket } from "@/lib/portal/api";
 import { useShopToken } from "@/lib/portal/shop-session";
@@ -8,8 +8,8 @@ export const Route = createFileRoute("/portal/tickets/$ticketId")({
   component: TicketDetail,
 });
 
-function TicketDetail() {
-  const { ticketId } = Route.useParams();
+export function TicketDetail() {
+  const { ticketId = "" } = useParams({ strict: false });
   const id = Number(ticketId);
   const token = useShopToken();
   const client = useQueryClient();

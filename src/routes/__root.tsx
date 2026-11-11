@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/lib/auth/provider";
 import { PreviewHostBridge } from "@/components/preview-host-bridge";
+import { rewriteProductionPath } from "@/lib/portal/paths";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -33,6 +34,9 @@ export const Route = createRootRoute({
 
 function EntryGate() {
   const path = useRouterState({ select: (state) => state.location.pathname });
+  const fromProduction = typeof window !== "undefined" && sessionStorage.getItem("mts-production-portal") === "1";
+  const rewritten = fromProduction ? rewriteProductionPath(path) : null;
+  if (rewritten && rewritten !== path) return <Navigate to={rewritten} replace />;
   const open =
     path === "/" ||
     path === "/upgrade" ||

@@ -1,52 +1,56 @@
-import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
-import { signOut } from "@/lib/auth/client";
+import { useQuery } from "@tanstack/react-query";
+import { createFileRoute, Navigate, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { PortalShell } from "@/components/customer-portal";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { Boot } from "@/components/ui";
+import { openPortalFromAuth } from "@/lib/portal/api";
+import { rewriteProductionPath } from "@/lib/portal/paths";
+import { setShopToken, useShopToken } from "@/lib/portal/shop-session";
+import { PortalHome } from "@/routes/portal/index";
 
 export const Route = createFileRoute("/production/user-portal")({
-  head: () => ({
-    meta: [{ title: "User Portal · Manage Tech Service" }],
-  }),
-  component: ProductionAccount,
+  component: ProductionPortalLayout,
 });
 
-const font = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif';
-
-function ProductionAccount() {
+function ProductionPortalLayout() {
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  const navigate = useNavigate();
   const { user, isPending } = useCurrentUserState();
-  if (isPending) return <Boot />;
-  if (!user) return <Navigate to="/production/signin" />;
-  const name = user.displayName || user.primaryEmail || "there";
+  const token = useShopToken();
+  const link = useQuery({
+    queryKey: ["portal-auth", user?.id],
+    queryFn: () => openPortalFromAuth(),
+    enabled: Boolean(user),
+    retry: false,
+  });
+  if (typeof window !== "undefined") sessionStorage.setItem("mts-production-portal", "1");
+  useEffect(() => {
+    if (link.data?.token && link.data.token !== token) setShopToken(link.data.token);
+  }, [link.data?.token, token]);
+  useEffect(() => {
+    function onClick(event: MouseEvent) {
+      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      const anchor = (event.target as Element | null)?.closest("a");
+      if (!anchor) return;
+      const href = anchor.getAttribute("href");
+      if (!href || href.startsWith("#") || href.startsWith("mailto:") || href.startsWith("tel:")) return;
+      const url = new URL(href, window.location.origin);
+      if (url.origin !== window.location.origin) return;
+      const next = rewriteProductionPath(url.pathname);
+      if (!next || next === url.pathname) return;
+      event.preventDefault();
+      event.stopPropagation();
+      void navigate({ to: next });
+    }
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
+  }, [navigate]);
+  if (!isPending && !user) return <Navigate to="/production/signin" />;
+  const home = path === "/production/user-portal" || path === "/production/user-portal/";
   return (
-    <main className="min-h-dvh bg-[#f5f5f7] text-[#1d1d1f]" style={{ fontFamily: font }}>
-      <header className="mx-auto flex h-14 w-full max-w-3xl items-center justify-between px-5">
-        <Link to="/production" className="flex items-center gap-3">
-          <span className="grid h-9 w-14 place-items-center overflow-hidden rounded-lg bg-black">
-            <img src="/brand/mts-mark.png" alt="MTS" className="h-7 w-auto object-contain" />
-          </span>
-          <span className="text-sm font-semibold tracking-tight">User Portal</span>
-        </Link>
-        <button type="button" onClick={() => void signOut("/production")} className="text-sm font-medium text-[#6e6e73]">
-          Sign out
-        </button>
-      </header>
-      <section className="mx-auto w-full max-w-3xl px-5 py-16">
-        <p className="text-sm font-medium text-[#6e6e73]">Manage Tech Service</p>
-        <h1 className="mt-2 text-5xl font-semibold tracking-[-0.03em]">Welcome, {name}.</h1>
-        <p className="mt-4 max-w-xl text-lg leading-8 text-[#6e6e73]">This is the new portal. Your invitation is active. Tickets, orders, and services will live here as this build grows.</p>
-        <div className="mt-10 grid gap-3">
-          {[
-            ["Managed IT", "/production#managed-it"],
-            ["Cloud Services", "/production#cloud"],
-            ["IT Projects", "/production#projects"],
-            ["Help Desk", "/production#help-desk"],
-          ].map(([label, href]) => (
-            <a key={label} href={href} className="rounded-2xl bg-white px-5 py-5 text-[15px] font-medium">
-              {label}
-            </a>
-          ))}
-        </div>
-      </section>
-    </main>
+    <PortalShell>
+      {link.isError ? <p className="mb-4 rounded-xl bg-bad-soft px-4 py-3 text-sm text-bad">{link.error instanceof Error ? link.error.message : "The portal could not open this account."}</p> : null}
+      {home ? <PortalHome /> : path.endsWith("/call") ? <Outlet /> : <Outlet />}
+    </PortalShell>
   );
 }

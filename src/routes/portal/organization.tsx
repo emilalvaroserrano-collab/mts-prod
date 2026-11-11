@@ -11,7 +11,7 @@ export const Route = createFileRoute("/portal/organization")({
   component: OrganizationPage,
 });
 
-function OrganizationPage() {
+export function OrganizationPage() {
   const token = useShopToken();
   const client = useQueryClient();
   const session = usePortalSession();

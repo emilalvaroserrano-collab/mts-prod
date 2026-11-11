@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { getService, requestPortalService } from "@/lib/portal/api";
@@ -9,8 +9,8 @@ export const Route = createFileRoute("/portal/services/$serviceId")({
   component: ServiceDetail,
 });
 
-function ServiceDetail() {
-  const { serviceId } = Route.useParams();
+export function ServiceDetail() {
+  const { serviceId = "" } = useParams({ strict: false });
   const id = Number(serviceId);
   const token = useShopToken();
   const client = useQueryClient();

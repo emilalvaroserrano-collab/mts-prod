@@ -10,7 +10,7 @@ export const Route = createFileRoute("/portal/complaints")({
 
 const KINDS = ["Service complaint", "Billing complaint", "Technical support complaint", "Delivery or order complaint", "General feedback"];
 
-function ComplaintsPage() {
+export function ComplaintsPage() {
   const token = useShopToken();
   const client = useQueryClient();
   const mine = useQuery({ queryKey: ["complaints", token], queryFn: () => listMyComplaints({ data: token }), enabled: Boolean(token) });

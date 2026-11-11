@@ -12,7 +12,7 @@ type DeskWindow = Window & {
   MTS_CSR_NAVIGATE?: (route: string) => void;
 };
 
-function CallDesk() {
+export function CallDesk() {
   const frame = useRef<HTMLIFrameElement>(null);
   const user = useCurrentUser();
   const session = usePortalSession();

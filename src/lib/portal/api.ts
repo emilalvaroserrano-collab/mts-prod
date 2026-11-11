@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { authMiddleware } from "@/lib/auth/middleware";
+import { zendeskSupportToken } from "@/lib/auth/zendesk-invite";
 import { getSql, type Sql } from "@/lib/db";
 import { storeSlug } from "./format";
 import { commentIsPublic, unpaidCardStatus, verificationDecision } from "./security";
@@ -727,18 +728,20 @@ async function zendeskAccessToken(settings: ZSettings) {
 }
 
 async function zendeskAuthorization(settings: ZSettings) {
-  if (clientCredentialsReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
-  if (settings.subdomain && settings.email && settings.apiToken) {
-    return `Basic ${basicAuth(settings.email, settings.apiToken)}`;
+  try {
+    return `Bearer ${await zendeskSupportToken()}`;
+  } catch (cause) {
+    if (clientCredentialsReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
+    if (settings.subdomain && settings.email && settings.apiToken) {
+      return `Basic ${basicAuth(settings.email, settings.apiToken)}`;
+    }
+    throw cause instanceof Error ? cause : new Error("Zendesk Support is not connected.");
   }
-  throw new Error("Zendesk Support is not connected. Add an agent email and API token. The shared mts-portal account is already set.");
 }
 
 async function zendesk(settings: ZSettings, path: string, init?: RequestInit) {
-  if (!settings.subdomain || (!clientCredentialsReady(settings) && !(settings.email && settings.apiToken))) {
-    throw new Error("Zendesk is not connected. Set ZENDESK_OAUTH_CLIENT_ID and ZENDESK_OAUTH_CLIENT_SECRET for shop, or an API token.");
-  }
-  const url = path.startsWith("http") ? path : `https://${settings.subdomain}.zendesk.com/api/v2${path}`;
+  const host = "mts-portal";
+  const url = path.startsWith("http") ? path : `https://${host}.zendesk.com/api/v2${path}`;
   const run = async () =>
     fetch(url, {
       ...init,
@@ -828,9 +831,9 @@ type ZendeskDirectoryUser = {
 function directoryUser(item: unknown): ZendeskDirectoryUser | null {
   const user = obj(item);
   const email = typeof user.email === "string" ? user.email.trim().toLowerCase() : "";
-  if (!email || user.id == null || user.active === false) return null;
+  if (!email || user.id == null || user.active === false || user.suspended === true) return null;
   const role = typeof user.role === "string" ? user.role : "end-user";
-  if (role !== "end-user") return null;
+  if (role !== "end-user" && role !== "agent" && role !== "admin") return null;
   return {
     id: String(user.id),
     name: typeof user.name === "string" && user.name.trim() ? user.name.trim() : email,
@@ -876,8 +879,7 @@ async function acceptZendeskDirectoryUser(sql: Sql, remote: ZendeskDirectoryUser
 
 async function lookupZendeskEndUser(sql: Sql, email: string) {
   const settings = await readZendesk(sql);
-  if (!supportConnected(settings)) return null;
-  const payload = await zendesk(settings, `/users/search.json?query=${encodeURIComponent(`email:${email}`)}`);
+  const payload = await zendesk(settings, `/users/search.json?query=${encodeURIComponent(`type:user email:${email}`)}`);
   const users = Array.isArray(payload.users) ? payload.users : [];
   return users.map(directoryUser).find((user) => user && user.email === email) ?? null;
 }
@@ -1136,8 +1138,9 @@ export const openPortalFromAuth = createServerFn({ method: "GET" })
     let remote: ZendeskDirectoryUser | null = null;
     try {
       remote = await lookupZendeskEndUser(sql, email);
-    } catch {
-      remote = null;
+    } catch (cause) {
+      const detail = cause instanceof Error ? cause.message : "Zendesk lookup failed.";
+      throw new Error(`Zendesk is connected, but this account could not be read. ${detail}`);
     }
     if (remote) await acceptZendeskDirectoryUser(sql, remote);
     const existing = await sql<Row>`select id, zendesk_user_id from shop_customers where lower(email) = ${email} limit 1`;

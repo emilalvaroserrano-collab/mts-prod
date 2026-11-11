@@ -9,7 +9,7 @@ export const Route = createFileRoute("/portal/my-services")({
   component: MyServices,
 });
 
-function MyServices() {
+export function MyServices() {
   const token = useShopToken();
   const session = usePortalSession();
   const mine = useQuery({ queryKey: ["portal-services", token], queryFn: () => listPortalServices({ data: token }), enabled: Boolean(token) });

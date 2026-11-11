@@ -10,7 +10,7 @@ export const Route = createFileRoute("/portal/orders/")({
   component: OrdersPage,
 });
 
-function OrdersPage() {
+export function OrdersPage() {
   const token = useShopToken();
   const session = usePortalSession();
   const account = useQuery({ queryKey: ["shop-account", token], queryFn: () => getShopAccount({ data: token }), enabled: Boolean(token) });

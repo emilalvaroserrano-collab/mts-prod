@@ -10,13 +10,14 @@ import type { Product } from "@/lib/portal/types";
 const FREE_SHIPPING = 50000;
 
 export function useStore() {
-  const { slug } = useParams({ strict: false }) as { slug: string };
+  const { slug: requested } = useParams({ strict: false }) as { slug?: string };
   const query = useQuery({ queryKey: ["storefront"], queryFn: () => getStorefront() });
-  return { slug, query };
+  const slug = requested || query.data?.slug || "";
+  return { slug, requested, query };
 }
 
 export function StoreFrame({ children }: { children: ReactNode }) {
-  const { slug, query } = useStore();
+  const { slug, requested, query } = useStore();
   const path = useRouterState({ select: (state) => state.location.pathname });
   const [cartOpen, setCartOpen] = useState(false);
   const lines = useCart();
@@ -31,7 +32,7 @@ export function StoreFrame({ children }: { children: ReactNode }) {
     return <main className="grid min-h-screen place-items-center bg-white px-6 text-sm text-bad">{query.error.message}</main>;
   }
   const store = query.data;
-  if (store.slug !== slug) return <Navigate to="/store/$slug" params={{ slug: store.slug }} />;
+  if (requested && store.slug !== requested) return <Navigate to="/store/$slug" params={{ slug: store.slug }} />;
 
   if (checkout) {
     return (

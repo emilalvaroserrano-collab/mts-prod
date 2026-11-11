@@ -24,6 +24,13 @@ const NAV = [
 
 const MOBILE_TABS = ["/portal", "/portal/tickets", "/portal/shop", "/portal/billing", "/portal/account"] as const;
 
+function portalHref(path: string, to: string) {
+  const base = path.startsWith("/production/user-portal") ? "/production/user-portal" : "/portal";
+  if (to === "/portal") return base;
+  if (to.startsWith("/portal/")) return `${base}${to.slice("/portal".length)}`;
+  return to;
+}
+
 export function PortalShell({ children }: { children: ReactNode }) {
   const path = useRouterState({ select: (state) => state.location.pathname });
   const session = usePortalSession();
@@ -38,7 +45,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
     refetchInterval: 15000,
   });
   const [menu, setMenu] = useState(false);
-  const current = NAV.find((item) => ("exact" in item && item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`)));
+  const current = NAV.find((item) => {
+    const href = portalHref(path, item.to);
+    return "exact" in item && item.exact ? path === href : path === href || path.startsWith(`${href}/`);
+  });
   const name = user?.displayName || session.data?.customer.name || "there";
   const count = cart.reduce((sum, line) => sum + line.quantity, 0);
 
@@ -57,15 +67,16 @@ export function PortalShell({ children }: { children: ReactNode }) {
       </div>
       <header className="fixed inset-x-0 top-0 z-30 border-b border-line bg-surface/95 backdrop-blur md:sticky" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="mx-auto grid h-14 w-full max-w-6xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 md:h-16 md:gap-3 md:px-8">
-          <Link to="/portal" className="flex min-w-0 items-center gap-2 md:hidden">
+          <Link to={portalHref(path, "/portal") as "/portal"} className="flex min-w-0 items-center gap-2 md:hidden">
             <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-ink text-[11px] font-semibold text-white">MT</span>
             <span className="truncate text-sm font-semibold">{current?.label ?? "MTS"}</span>
           </Link>
           <nav className="hidden min-w-0 items-center gap-1 overflow-x-auto md:col-start-1 md:flex" aria-label="Customer">
             {NAV.map((item) => {
+              const href = portalHref(path, item.to);
               const active = current?.to === item.to;
               return (
-                <Link key={item.to} to={item.to} data-guide={item.guide} className={active ? "shrink-0 rounded-lg bg-ink px-3 py-2 text-sm text-white" : "shrink-0 rounded-lg px-3 py-2 text-sm text-ink hover:bg-surface-2"}>
+                <Link key={item.to} to={href as "/portal"} data-guide={item.guide} className={active ? "shrink-0 rounded-lg bg-ink px-3 py-2 text-sm text-white" : "shrink-0 rounded-lg px-3 py-2 text-sm text-ink hover:bg-surface-2"}>
                   {item.label}
                 </Link>
               );
@@ -77,11 +88,11 @@ export function PortalShell({ children }: { children: ReactNode }) {
             ) : null}
           </nav>
           <div className="col-start-3 flex shrink-0 items-center justify-end">
-            <Link to="/portal/shop" className="relative hidden size-11 place-items-center rounded-xl md:grid" aria-label="Order">
+            <Link to={portalHref(path, "/portal/shop") as "/portal"} className="relative hidden size-11 place-items-center rounded-xl md:grid" aria-label="Order">
               <ClipboardList className="size-5" />
               {count > 0 ? <span className="absolute top-1 right-1 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-white">{count}</span> : null}
             </Link>
-            <Link to="/portal/notifications" data-guide="notifications" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Notifications"><Bell className="size-5" /></Link>
+            <Link to={portalHref(path, "/portal/notifications") as "/portal"} data-guide="notifications" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Notifications"><Bell className="size-5" /></Link>
             <SarahHeaderButton />
             {home.data?.desk ? (
               <a href="/dashboard" className="grid size-10 place-items-center rounded-xl text-accent md:hidden" aria-label="Admin">
@@ -91,7 +102,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
             <button type="button" className="grid size-10 place-items-center rounded-xl md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
               <Menu className="size-5" />
             </button>
-            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut("/upgrade"); }}>
+            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut(path.startsWith("/production") ? "/production" : "/upgrade"); }}>
               <LogOut className="size-5" />
             </button>
           </div>
@@ -111,10 +122,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
               <button type="button" aria-label="Close menu" onClick={() => setMenu(false)} className="grid size-10 shrink-0 place-items-center"><X className="size-5" /></button>
             </div>
             {NAV.map((item) => (
-              <Link key={item.to} to={item.to} data-guide={item.guide} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">{item.label}</Link>
+              <Link key={item.to} to={portalHref(path, item.to) as "/portal"} data-guide={item.guide} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">{item.label}</Link>
             ))}
-            <Link to="/portal/notifications" onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">Notifications</Link>
-            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut("/upgrade"); }}>Sign out</button>
+            <Link to={portalHref(path, "/portal/notifications") as "/portal"} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">Notifications</Link>
+            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut(path.startsWith("/production") ? "/production" : "/upgrade"); }}>Sign out</button>
           </div>
         </div>
       ) : null}
@@ -124,9 +135,10 @@ export function PortalShell({ children }: { children: ReactNode }) {
           const item = NAV.find((entry) => entry.to === to);
           if (!item) return null;
           const Icon = item.icon;
-          const active = "exact" in item && item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`);
+          const href = portalHref(path, item.to);
+          const active = "exact" in item && item.exact ? path === href : path === href || path.startsWith(`${href}/`);
           return (
-            <Link key={to} to={item.to} data-guide={item.guide} aria-current={active ? "page" : undefined} className={active ? "grid min-h-14 place-items-center gap-0.5 text-ink" : "grid min-h-14 place-items-center gap-0.5 text-muted"}>
+            <Link key={to} to={href as "/portal"} data-guide={item.guide} aria-current={active ? "page" : undefined} className={active ? "grid min-h-14 place-items-center gap-0.5 text-ink" : "grid min-h-14 place-items-center gap-0.5 text-muted"}>
               <span className="relative">
                 <Icon className="size-5" strokeWidth={active ? 2.25 : 1.75} />
                 {item.to === "/portal/shop" && count > 0 ? <span className="absolute -top-1.5 -right-2 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-white">{count}</span> : null}

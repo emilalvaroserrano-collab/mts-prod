@@ -23,7 +23,7 @@ function CheckoutPage() {
   );
 }
 
-function Checkout() {
+export function Checkout() {
   const { slug, query } = useStore();
   const store = query.data;
   const lines = useCart();

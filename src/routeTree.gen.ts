@@ -70,12 +70,32 @@ import { Route as PortalServicesServiceIdRouteImport } from './routes/portal/ser
 import { Route as PortalTicketsIndexRouteImport } from './routes/portal/tickets/index'
 import { Route as PortalTicketsTicketIdRouteImport } from './routes/portal/tickets/$ticketId'
 import { Route as PortalTicketsNewRouteImport } from './routes/portal/tickets/new'
+import { Route as ProductionUserPortalIndexRouteImport } from './routes/production/user-portal/index'
+import { Route as ProductionUserPortalAccountRouteImport } from './routes/production/user-portal/account'
+import { Route as ProductionUserPortalBillingRouteImport } from './routes/production/user-portal/billing'
+import { Route as ProductionUserPortalCallRouteImport } from './routes/production/user-portal/call'
+import { Route as ProductionUserPortalCampaignsRouteImport } from './routes/production/user-portal/campaigns'
+import { Route as ProductionUserPortalCheckoutRouteImport } from './routes/production/user-portal/checkout'
+import { Route as ProductionUserPortalComplaintsRouteImport } from './routes/production/user-portal/complaints'
+import { Route as ProductionUserPortalMyServicesRouteImport } from './routes/production/user-portal/my-services'
+import { Route as ProductionUserPortalNotificationsRouteImport } from './routes/production/user-portal/notifications'
+import { Route as ProductionUserPortalOrganizationRouteImport } from './routes/production/user-portal/organization'
+import { Route as ProductionUserPortalQuotesRouteImport } from './routes/production/user-portal/quotes'
+import { Route as ProductionUserPortalShopRouteImport } from './routes/production/user-portal/shop'
 import { Route as StoreSlugIndexRouteImport } from './routes/store/$slug/index'
 import { Route as StoreSlugSkuRouteImport } from './routes/store/$slug/$sku'
 import { Route as StoreSlugAccountRouteImport } from './routes/store/$slug/account'
 import { Route as StoreSlugCheckoutRouteImport } from './routes/store/$slug/checkout'
 import { Route as StoreSlugServicesRouteImport } from './routes/store/$slug/services'
 import { Route as StoreSlugTicketsRouteImport } from './routes/store/$slug/tickets'
+import { Route as ProductionUserPortalOrdersIndexRouteImport } from './routes/production/user-portal/orders/index'
+import { Route as ProductionUserPortalOrdersOrderIdRouteImport } from './routes/production/user-portal/orders/$orderId'
+import { Route as ProductionUserPortalProductSkuRouteImport } from './routes/production/user-portal/product/$sku'
+import { Route as ProductionUserPortalServicesIndexRouteImport } from './routes/production/user-portal/services/index'
+import { Route as ProductionUserPortalServicesServiceIdRouteImport } from './routes/production/user-portal/services/$serviceId'
+import { Route as ProductionUserPortalTicketsIndexRouteImport } from './routes/production/user-portal/tickets/index'
+import { Route as ProductionUserPortalTicketsTicketIdRouteImport } from './routes/production/user-portal/tickets/$ticketId'
+import { Route as ProductionUserPortalTicketsNewRouteImport } from './routes/production/user-portal/tickets/new'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -382,6 +402,78 @@ const PortalTicketsNewRoute = PortalTicketsNewRouteImport.update({
   path: '/tickets/new',
   getParentRoute: () => PortalRoute,
 } as any)
+const ProductionUserPortalIndexRoute =
+  ProductionUserPortalIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalAccountRoute =
+  ProductionUserPortalAccountRouteImport.update({
+    id: '/account',
+    path: '/account',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalBillingRoute =
+  ProductionUserPortalBillingRouteImport.update({
+    id: '/billing',
+    path: '/billing',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalCallRoute =
+  ProductionUserPortalCallRouteImport.update({
+    id: '/call',
+    path: '/call',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalCampaignsRoute =
+  ProductionUserPortalCampaignsRouteImport.update({
+    id: '/campaigns',
+    path: '/campaigns',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalCheckoutRoute =
+  ProductionUserPortalCheckoutRouteImport.update({
+    id: '/checkout',
+    path: '/checkout',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalComplaintsRoute =
+  ProductionUserPortalComplaintsRouteImport.update({
+    id: '/complaints',
+    path: '/complaints',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalMyServicesRoute =
+  ProductionUserPortalMyServicesRouteImport.update({
+    id: '/my-services',
+    path: '/my-services',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalNotificationsRoute =
+  ProductionUserPortalNotificationsRouteImport.update({
+    id: '/notifications',
+    path: '/notifications',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalOrganizationRoute =
+  ProductionUserPortalOrganizationRouteImport.update({
+    id: '/organization',
+    path: '/organization',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalQuotesRoute =
+  ProductionUserPortalQuotesRouteImport.update({
+    id: '/quotes',
+    path: '/quotes',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalShopRoute =
+  ProductionUserPortalShopRouteImport.update({
+    id: '/shop',
+    path: '/shop',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
 const StoreSlugIndexRoute = StoreSlugIndexRouteImport.update({
   id: '/store/$slug/',
   path: '/store/$slug/',
@@ -412,6 +504,54 @@ const StoreSlugTicketsRoute = StoreSlugTicketsRouteImport.update({
   path: '/store/$slug/tickets',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ProductionUserPortalOrdersIndexRoute =
+  ProductionUserPortalOrdersIndexRouteImport.update({
+    id: '/orders/',
+    path: '/orders/',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalOrdersOrderIdRoute =
+  ProductionUserPortalOrdersOrderIdRouteImport.update({
+    id: '/orders/$orderId',
+    path: '/orders/$orderId',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalProductSkuRoute =
+  ProductionUserPortalProductSkuRouteImport.update({
+    id: '/product/$sku',
+    path: '/product/$sku',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalServicesIndexRoute =
+  ProductionUserPortalServicesIndexRouteImport.update({
+    id: '/services/',
+    path: '/services/',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalServicesServiceIdRoute =
+  ProductionUserPortalServicesServiceIdRouteImport.update({
+    id: '/services/$serviceId',
+    path: '/services/$serviceId',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalTicketsIndexRoute =
+  ProductionUserPortalTicketsIndexRouteImport.update({
+    id: '/tickets/',
+    path: '/tickets/',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalTicketsTicketIdRoute =
+  ProductionUserPortalTicketsTicketIdRouteImport.update({
+    id: '/tickets/$ticketId',
+    path: '/tickets/$ticketId',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
+const ProductionUserPortalTicketsNewRoute =
+  ProductionUserPortalTicketsNewRouteImport.update({
+    id: '/tickets/new',
+    path: '/tickets/new',
+    getParentRoute: () => ProductionUserPortalRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -449,7 +589,7 @@ export interface FileRoutesByFullPath {
   '/production/home': typeof ProductionHomeRoute
   '/production/sign-in': typeof ProductionSignInRoute
   '/production/signin': typeof ProductionSigninRoute
-  '/production/user-portal': typeof ProductionUserPortalRoute
+  '/production/user-portal': typeof ProductionUserPortalRouteWithChildren
   '/portal/': typeof PortalIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
@@ -467,6 +607,17 @@ export interface FileRoutesByFullPath {
   '/portal/services/$serviceId': typeof PortalServicesServiceIdRoute
   '/portal/tickets/$ticketId': typeof PortalTicketsTicketIdRoute
   '/portal/tickets/new': typeof PortalTicketsNewRoute
+  '/production/user-portal/account': typeof ProductionUserPortalAccountRoute
+  '/production/user-portal/billing': typeof ProductionUserPortalBillingRoute
+  '/production/user-portal/call': typeof ProductionUserPortalCallRoute
+  '/production/user-portal/campaigns': typeof ProductionUserPortalCampaignsRoute
+  '/production/user-portal/checkout': typeof ProductionUserPortalCheckoutRoute
+  '/production/user-portal/complaints': typeof ProductionUserPortalComplaintsRoute
+  '/production/user-portal/my-services': typeof ProductionUserPortalMyServicesRoute
+  '/production/user-portal/notifications': typeof ProductionUserPortalNotificationsRoute
+  '/production/user-portal/organization': typeof ProductionUserPortalOrganizationRoute
+  '/production/user-portal/quotes': typeof ProductionUserPortalQuotesRoute
+  '/production/user-portal/shop': typeof ProductionUserPortalShopRoute
   '/store/$slug/$sku': typeof StoreSlugSkuRoute
   '/store/$slug/account': typeof StoreSlugAccountRoute
   '/store/$slug/checkout': typeof StoreSlugCheckoutRoute
@@ -479,7 +630,16 @@ export interface FileRoutesByFullPath {
   '/portal/orders/': typeof PortalOrdersIndexRoute
   '/portal/services/': typeof PortalServicesIndexRoute
   '/portal/tickets/': typeof PortalTicketsIndexRoute
+  '/production/user-portal/': typeof ProductionUserPortalIndexRoute
   '/store/$slug/': typeof StoreSlugIndexRoute
+  '/production/user-portal/orders/$orderId': typeof ProductionUserPortalOrdersOrderIdRoute
+  '/production/user-portal/product/$sku': typeof ProductionUserPortalProductSkuRoute
+  '/production/user-portal/services/$serviceId': typeof ProductionUserPortalServicesServiceIdRoute
+  '/production/user-portal/tickets/$ticketId': typeof ProductionUserPortalTicketsTicketIdRoute
+  '/production/user-portal/tickets/new': typeof ProductionUserPortalTicketsNewRoute
+  '/production/user-portal/orders/': typeof ProductionUserPortalOrdersIndexRoute
+  '/production/user-portal/services/': typeof ProductionUserPortalServicesIndexRoute
+  '/production/user-portal/tickets/': typeof ProductionUserPortalTicketsIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -516,7 +676,6 @@ export interface FileRoutesByTo {
   '/production/home': typeof ProductionHomeRoute
   '/production/sign-in': typeof ProductionSignInRoute
   '/production/signin': typeof ProductionSigninRoute
-  '/production/user-portal': typeof ProductionUserPortalRoute
   '/portal': typeof PortalIndexRoute
   '/production': typeof ProductionIndexRoute
   '/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
@@ -534,6 +693,17 @@ export interface FileRoutesByTo {
   '/portal/services/$serviceId': typeof PortalServicesServiceIdRoute
   '/portal/tickets/$ticketId': typeof PortalTicketsTicketIdRoute
   '/portal/tickets/new': typeof PortalTicketsNewRoute
+  '/production/user-portal/account': typeof ProductionUserPortalAccountRoute
+  '/production/user-portal/billing': typeof ProductionUserPortalBillingRoute
+  '/production/user-portal/call': typeof ProductionUserPortalCallRoute
+  '/production/user-portal/campaigns': typeof ProductionUserPortalCampaignsRoute
+  '/production/user-portal/checkout': typeof ProductionUserPortalCheckoutRoute
+  '/production/user-portal/complaints': typeof ProductionUserPortalComplaintsRoute
+  '/production/user-portal/my-services': typeof ProductionUserPortalMyServicesRoute
+  '/production/user-portal/notifications': typeof ProductionUserPortalNotificationsRoute
+  '/production/user-portal/organization': typeof ProductionUserPortalOrganizationRoute
+  '/production/user-portal/quotes': typeof ProductionUserPortalQuotesRoute
+  '/production/user-portal/shop': typeof ProductionUserPortalShopRoute
   '/store/$slug/$sku': typeof StoreSlugSkuRoute
   '/store/$slug/account': typeof StoreSlugAccountRoute
   '/store/$slug/checkout': typeof StoreSlugCheckoutRoute
@@ -546,7 +716,16 @@ export interface FileRoutesByTo {
   '/portal/orders': typeof PortalOrdersIndexRoute
   '/portal/services': typeof PortalServicesIndexRoute
   '/portal/tickets': typeof PortalTicketsIndexRoute
+  '/production/user-portal': typeof ProductionUserPortalIndexRoute
   '/store/$slug': typeof StoreSlugIndexRoute
+  '/production/user-portal/orders/$orderId': typeof ProductionUserPortalOrdersOrderIdRoute
+  '/production/user-portal/product/$sku': typeof ProductionUserPortalProductSkuRoute
+  '/production/user-portal/services/$serviceId': typeof ProductionUserPortalServicesServiceIdRoute
+  '/production/user-portal/tickets/$ticketId': typeof ProductionUserPortalTicketsTicketIdRoute
+  '/production/user-portal/tickets/new': typeof ProductionUserPortalTicketsNewRoute
+  '/production/user-portal/orders': typeof ProductionUserPortalOrdersIndexRoute
+  '/production/user-portal/services': typeof ProductionUserPortalServicesIndexRoute
+  '/production/user-portal/tickets': typeof ProductionUserPortalTicketsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -586,7 +765,7 @@ export interface FileRoutesById {
   '/production/home': typeof ProductionHomeRoute
   '/production/sign-in': typeof ProductionSignInRoute
   '/production/signin': typeof ProductionSigninRoute
-  '/production/user-portal': typeof ProductionUserPortalRoute
+  '/production/user-portal': typeof ProductionUserPortalRouteWithChildren
   '/portal/': typeof PortalIndexRoute
   '/production/': typeof ProductionIndexRoute
   '/_app/notifications/$notificationId': typeof AppNotificationsNotificationIdRoute
@@ -604,6 +783,17 @@ export interface FileRoutesById {
   '/portal/services/$serviceId': typeof PortalServicesServiceIdRoute
   '/portal/tickets/$ticketId': typeof PortalTicketsTicketIdRoute
   '/portal/tickets/new': typeof PortalTicketsNewRoute
+  '/production/user-portal/account': typeof ProductionUserPortalAccountRoute
+  '/production/user-portal/billing': typeof ProductionUserPortalBillingRoute
+  '/production/user-portal/call': typeof ProductionUserPortalCallRoute
+  '/production/user-portal/campaigns': typeof ProductionUserPortalCampaignsRoute
+  '/production/user-portal/checkout': typeof ProductionUserPortalCheckoutRoute
+  '/production/user-portal/complaints': typeof ProductionUserPortalComplaintsRoute
+  '/production/user-portal/my-services': typeof ProductionUserPortalMyServicesRoute
+  '/production/user-portal/notifications': typeof ProductionUserPortalNotificationsRoute
+  '/production/user-portal/organization': typeof ProductionUserPortalOrganizationRoute
+  '/production/user-portal/quotes': typeof ProductionUserPortalQuotesRoute
+  '/production/user-portal/shop': typeof ProductionUserPortalShopRoute
   '/store/$slug/$sku': typeof StoreSlugSkuRoute
   '/store/$slug/account': typeof StoreSlugAccountRoute
   '/store/$slug/checkout': typeof StoreSlugCheckoutRoute
@@ -616,7 +806,16 @@ export interface FileRoutesById {
   '/portal/orders/': typeof PortalOrdersIndexRoute
   '/portal/services/': typeof PortalServicesIndexRoute
   '/portal/tickets/': typeof PortalTicketsIndexRoute
+  '/production/user-portal/': typeof ProductionUserPortalIndexRoute
   '/store/$slug/': typeof StoreSlugIndexRoute
+  '/production/user-portal/orders/$orderId': typeof ProductionUserPortalOrdersOrderIdRoute
+  '/production/user-portal/product/$sku': typeof ProductionUserPortalProductSkuRoute
+  '/production/user-portal/services/$serviceId': typeof ProductionUserPortalServicesServiceIdRoute
+  '/production/user-portal/tickets/$ticketId': typeof ProductionUserPortalTicketsTicketIdRoute
+  '/production/user-portal/tickets/new': typeof ProductionUserPortalTicketsNewRoute
+  '/production/user-portal/orders/': typeof ProductionUserPortalOrdersIndexRoute
+  '/production/user-portal/services/': typeof ProductionUserPortalServicesIndexRoute
+  '/production/user-portal/tickets/': typeof ProductionUserPortalTicketsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -674,6 +873,17 @@ export interface FileRouteTypes {
     | '/portal/services/$serviceId'
     | '/portal/tickets/$ticketId'
     | '/portal/tickets/new'
+    | '/production/user-portal/account'
+    | '/production/user-portal/billing'
+    | '/production/user-portal/call'
+    | '/production/user-portal/campaigns'
+    | '/production/user-portal/checkout'
+    | '/production/user-portal/complaints'
+    | '/production/user-portal/my-services'
+    | '/production/user-portal/notifications'
+    | '/production/user-portal/organization'
+    | '/production/user-portal/quotes'
+    | '/production/user-portal/shop'
     | '/store/$slug/$sku'
     | '/store/$slug/account'
     | '/store/$slug/checkout'
@@ -686,7 +896,16 @@ export interface FileRouteTypes {
     | '/portal/orders/'
     | '/portal/services/'
     | '/portal/tickets/'
+    | '/production/user-portal/'
     | '/store/$slug/'
+    | '/production/user-portal/orders/$orderId'
+    | '/production/user-portal/product/$sku'
+    | '/production/user-portal/services/$serviceId'
+    | '/production/user-portal/tickets/$ticketId'
+    | '/production/user-portal/tickets/new'
+    | '/production/user-portal/orders/'
+    | '/production/user-portal/services/'
+    | '/production/user-portal/tickets/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -723,7 +942,6 @@ export interface FileRouteTypes {
     | '/production/home'
     | '/production/sign-in'
     | '/production/signin'
-    | '/production/user-portal'
     | '/portal'
     | '/production'
     | '/notifications/$notificationId'
@@ -741,6 +959,17 @@ export interface FileRouteTypes {
     | '/portal/services/$serviceId'
     | '/portal/tickets/$ticketId'
     | '/portal/tickets/new'
+    | '/production/user-portal/account'
+    | '/production/user-portal/billing'
+    | '/production/user-portal/call'
+    | '/production/user-portal/campaigns'
+    | '/production/user-portal/checkout'
+    | '/production/user-portal/complaints'
+    | '/production/user-portal/my-services'
+    | '/production/user-portal/notifications'
+    | '/production/user-portal/organization'
+    | '/production/user-portal/quotes'
+    | '/production/user-portal/shop'
     | '/store/$slug/$sku'
     | '/store/$slug/account'
     | '/store/$slug/checkout'
@@ -753,7 +982,16 @@ export interface FileRouteTypes {
     | '/portal/orders'
     | '/portal/services'
     | '/portal/tickets'
+    | '/production/user-portal'
     | '/store/$slug'
+    | '/production/user-portal/orders/$orderId'
+    | '/production/user-portal/product/$sku'
+    | '/production/user-portal/services/$serviceId'
+    | '/production/user-portal/tickets/$ticketId'
+    | '/production/user-portal/tickets/new'
+    | '/production/user-portal/orders'
+    | '/production/user-portal/services'
+    | '/production/user-portal/tickets'
   id:
     | '__root__'
     | '/'
@@ -810,6 +1048,17 @@ export interface FileRouteTypes {
     | '/portal/services/$serviceId'
     | '/portal/tickets/$ticketId'
     | '/portal/tickets/new'
+    | '/production/user-portal/account'
+    | '/production/user-portal/billing'
+    | '/production/user-portal/call'
+    | '/production/user-portal/campaigns'
+    | '/production/user-portal/checkout'
+    | '/production/user-portal/complaints'
+    | '/production/user-portal/my-services'
+    | '/production/user-portal/notifications'
+    | '/production/user-portal/organization'
+    | '/production/user-portal/quotes'
+    | '/production/user-portal/shop'
     | '/store/$slug/$sku'
     | '/store/$slug/account'
     | '/store/$slug/checkout'
@@ -822,7 +1071,16 @@ export interface FileRouteTypes {
     | '/portal/orders/'
     | '/portal/services/'
     | '/portal/tickets/'
+    | '/production/user-portal/'
     | '/store/$slug/'
+    | '/production/user-portal/orders/$orderId'
+    | '/production/user-portal/product/$sku'
+    | '/production/user-portal/services/$serviceId'
+    | '/production/user-portal/tickets/$ticketId'
+    | '/production/user-portal/tickets/new'
+    | '/production/user-portal/orders/'
+    | '/production/user-portal/services/'
+    | '/production/user-portal/tickets/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -837,7 +1095,7 @@ export interface RootRouteChildren {
   ProductionHomeRoute: typeof ProductionHomeRoute
   ProductionSignInRoute: typeof ProductionSignInRoute
   ProductionSigninRoute: typeof ProductionSigninRoute
-  ProductionUserPortalRoute: typeof ProductionUserPortalRoute
+  ProductionUserPortalRoute: typeof ProductionUserPortalRouteWithChildren
   ProductionIndexRoute: typeof ProductionIndexRoute
   ApiAgentSplatRoute: typeof ApiAgentSplatRoute
   ApiAuthSplatRoute: typeof ApiAuthSplatRoute
@@ -1283,6 +1541,90 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PortalTicketsNewRouteImport
       parentRoute: typeof PortalRoute
     }
+    '/production/user-portal/': {
+      id: '/production/user-portal/'
+      path: '/'
+      fullPath: '/production/user-portal/'
+      preLoaderRoute: typeof ProductionUserPortalIndexRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/account': {
+      id: '/production/user-portal/account'
+      path: '/account'
+      fullPath: '/production/user-portal/account'
+      preLoaderRoute: typeof ProductionUserPortalAccountRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/billing': {
+      id: '/production/user-portal/billing'
+      path: '/billing'
+      fullPath: '/production/user-portal/billing'
+      preLoaderRoute: typeof ProductionUserPortalBillingRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/call': {
+      id: '/production/user-portal/call'
+      path: '/call'
+      fullPath: '/production/user-portal/call'
+      preLoaderRoute: typeof ProductionUserPortalCallRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/campaigns': {
+      id: '/production/user-portal/campaigns'
+      path: '/campaigns'
+      fullPath: '/production/user-portal/campaigns'
+      preLoaderRoute: typeof ProductionUserPortalCampaignsRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/checkout': {
+      id: '/production/user-portal/checkout'
+      path: '/checkout'
+      fullPath: '/production/user-portal/checkout'
+      preLoaderRoute: typeof ProductionUserPortalCheckoutRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/complaints': {
+      id: '/production/user-portal/complaints'
+      path: '/complaints'
+      fullPath: '/production/user-portal/complaints'
+      preLoaderRoute: typeof ProductionUserPortalComplaintsRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/my-services': {
+      id: '/production/user-portal/my-services'
+      path: '/my-services'
+      fullPath: '/production/user-portal/my-services'
+      preLoaderRoute: typeof ProductionUserPortalMyServicesRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/notifications': {
+      id: '/production/user-portal/notifications'
+      path: '/notifications'
+      fullPath: '/production/user-portal/notifications'
+      preLoaderRoute: typeof ProductionUserPortalNotificationsRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/organization': {
+      id: '/production/user-portal/organization'
+      path: '/organization'
+      fullPath: '/production/user-portal/organization'
+      preLoaderRoute: typeof ProductionUserPortalOrganizationRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/quotes': {
+      id: '/production/user-portal/quotes'
+      path: '/quotes'
+      fullPath: '/production/user-portal/quotes'
+      preLoaderRoute: typeof ProductionUserPortalQuotesRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/shop': {
+      id: '/production/user-portal/shop'
+      path: '/shop'
+      fullPath: '/production/user-portal/shop'
+      preLoaderRoute: typeof ProductionUserPortalShopRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
     '/store/$slug/': {
       id: '/store/$slug/'
       path: '/store/$slug'
@@ -1324,6 +1666,62 @@ declare module '@tanstack/react-router' {
       fullPath: '/store/$slug/tickets'
       preLoaderRoute: typeof StoreSlugTicketsRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/production/user-portal/orders/': {
+      id: '/production/user-portal/orders/'
+      path: '/orders'
+      fullPath: '/production/user-portal/orders/'
+      preLoaderRoute: typeof ProductionUserPortalOrdersIndexRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/orders/$orderId': {
+      id: '/production/user-portal/orders/$orderId'
+      path: '/orders/$orderId'
+      fullPath: '/production/user-portal/orders/$orderId'
+      preLoaderRoute: typeof ProductionUserPortalOrdersOrderIdRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/product/$sku': {
+      id: '/production/user-portal/product/$sku'
+      path: '/product/$sku'
+      fullPath: '/production/user-portal/product/$sku'
+      preLoaderRoute: typeof ProductionUserPortalProductSkuRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/services/': {
+      id: '/production/user-portal/services/'
+      path: '/services'
+      fullPath: '/production/user-portal/services/'
+      preLoaderRoute: typeof ProductionUserPortalServicesIndexRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/services/$serviceId': {
+      id: '/production/user-portal/services/$serviceId'
+      path: '/services/$serviceId'
+      fullPath: '/production/user-portal/services/$serviceId'
+      preLoaderRoute: typeof ProductionUserPortalServicesServiceIdRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/tickets/': {
+      id: '/production/user-portal/tickets/'
+      path: '/tickets'
+      fullPath: '/production/user-portal/tickets/'
+      preLoaderRoute: typeof ProductionUserPortalTicketsIndexRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/tickets/$ticketId': {
+      id: '/production/user-portal/tickets/$ticketId'
+      path: '/tickets/$ticketId'
+      fullPath: '/production/user-portal/tickets/$ticketId'
+      preLoaderRoute: typeof ProductionUserPortalTicketsTicketIdRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
+    }
+    '/production/user-portal/tickets/new': {
+      id: '/production/user-portal/tickets/new'
+      path: '/tickets/new'
+      fullPath: '/production/user-portal/tickets/new'
+      preLoaderRoute: typeof ProductionUserPortalTicketsNewRouteImport
+      parentRoute: typeof ProductionUserPortalRoute
     }
   }
 }
@@ -1427,6 +1825,60 @@ const PortalRouteChildren: PortalRouteChildren = {
 const PortalRouteWithChildren =
   PortalRoute._addFileChildren(PortalRouteChildren)
 
+interface ProductionUserPortalRouteChildren {
+  ProductionUserPortalAccountRoute: typeof ProductionUserPortalAccountRoute
+  ProductionUserPortalBillingRoute: typeof ProductionUserPortalBillingRoute
+  ProductionUserPortalCallRoute: typeof ProductionUserPortalCallRoute
+  ProductionUserPortalCampaignsRoute: typeof ProductionUserPortalCampaignsRoute
+  ProductionUserPortalCheckoutRoute: typeof ProductionUserPortalCheckoutRoute
+  ProductionUserPortalComplaintsRoute: typeof ProductionUserPortalComplaintsRoute
+  ProductionUserPortalMyServicesRoute: typeof ProductionUserPortalMyServicesRoute
+  ProductionUserPortalNotificationsRoute: typeof ProductionUserPortalNotificationsRoute
+  ProductionUserPortalOrganizationRoute: typeof ProductionUserPortalOrganizationRoute
+  ProductionUserPortalQuotesRoute: typeof ProductionUserPortalQuotesRoute
+  ProductionUserPortalShopRoute: typeof ProductionUserPortalShopRoute
+  ProductionUserPortalIndexRoute: typeof ProductionUserPortalIndexRoute
+  ProductionUserPortalOrdersOrderIdRoute: typeof ProductionUserPortalOrdersOrderIdRoute
+  ProductionUserPortalProductSkuRoute: typeof ProductionUserPortalProductSkuRoute
+  ProductionUserPortalServicesServiceIdRoute: typeof ProductionUserPortalServicesServiceIdRoute
+  ProductionUserPortalTicketsTicketIdRoute: typeof ProductionUserPortalTicketsTicketIdRoute
+  ProductionUserPortalTicketsNewRoute: typeof ProductionUserPortalTicketsNewRoute
+  ProductionUserPortalOrdersIndexRoute: typeof ProductionUserPortalOrdersIndexRoute
+  ProductionUserPortalServicesIndexRoute: typeof ProductionUserPortalServicesIndexRoute
+  ProductionUserPortalTicketsIndexRoute: typeof ProductionUserPortalTicketsIndexRoute
+}
+
+const ProductionUserPortalRouteChildren: ProductionUserPortalRouteChildren = {
+  ProductionUserPortalAccountRoute: ProductionUserPortalAccountRoute,
+  ProductionUserPortalBillingRoute: ProductionUserPortalBillingRoute,
+  ProductionUserPortalCallRoute: ProductionUserPortalCallRoute,
+  ProductionUserPortalCampaignsRoute: ProductionUserPortalCampaignsRoute,
+  ProductionUserPortalCheckoutRoute: ProductionUserPortalCheckoutRoute,
+  ProductionUserPortalComplaintsRoute: ProductionUserPortalComplaintsRoute,
+  ProductionUserPortalMyServicesRoute: ProductionUserPortalMyServicesRoute,
+  ProductionUserPortalNotificationsRoute:
+    ProductionUserPortalNotificationsRoute,
+  ProductionUserPortalOrganizationRoute: ProductionUserPortalOrganizationRoute,
+  ProductionUserPortalQuotesRoute: ProductionUserPortalQuotesRoute,
+  ProductionUserPortalShopRoute: ProductionUserPortalShopRoute,
+  ProductionUserPortalIndexRoute: ProductionUserPortalIndexRoute,
+  ProductionUserPortalOrdersOrderIdRoute:
+    ProductionUserPortalOrdersOrderIdRoute,
+  ProductionUserPortalProductSkuRoute: ProductionUserPortalProductSkuRoute,
+  ProductionUserPortalServicesServiceIdRoute:
+    ProductionUserPortalServicesServiceIdRoute,
+  ProductionUserPortalTicketsTicketIdRoute:
+    ProductionUserPortalTicketsTicketIdRoute,
+  ProductionUserPortalTicketsNewRoute: ProductionUserPortalTicketsNewRoute,
+  ProductionUserPortalOrdersIndexRoute: ProductionUserPortalOrdersIndexRoute,
+  ProductionUserPortalServicesIndexRoute:
+    ProductionUserPortalServicesIndexRoute,
+  ProductionUserPortalTicketsIndexRoute: ProductionUserPortalTicketsIndexRoute,
+}
+
+const ProductionUserPortalRouteWithChildren =
+  ProductionUserPortalRoute._addFileChildren(ProductionUserPortalRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SplatRoute: SplatRoute,
@@ -1439,7 +1891,7 @@ const rootRouteChildren: RootRouteChildren = {
   ProductionHomeRoute: ProductionHomeRoute,
   ProductionSignInRoute: ProductionSignInRoute,
   ProductionSigninRoute: ProductionSigninRoute,
-  ProductionUserPortalRoute: ProductionUserPortalRoute,
+  ProductionUserPortalRoute: ProductionUserPortalRouteWithChildren,
   ProductionIndexRoute: ProductionIndexRoute,
   ApiAgentSplatRoute: ApiAgentSplatRoute,
   ApiAuthSplatRoute: ApiAuthSplatRoute,

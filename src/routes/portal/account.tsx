@@ -12,7 +12,7 @@ export const Route = createFileRoute("/portal/account")({
   component: AccountPage,
 });
 
-function AccountPage() {
+export function AccountPage() {
   const token = useShopToken();
   const session = usePortalSession();
   const user = useCurrentUser();

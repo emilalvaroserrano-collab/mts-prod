@@ -4,13 +4,14 @@ import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { getShopAccount, getStorefront, listPortalServices } from "@/lib/portal/api";
 import { money } from "@/lib/portal/format";
 import { useShopToken } from "@/lib/portal/shop-session";
+import { catalogHref } from "@/lib/portal/paths";
 import { DataField, PortalPanel, StatTile } from "@/components/portal-ui";
 
 export const Route = createFileRoute("/portal/")({
   component: PortalHome,
 });
 
-function PortalHome() {
+export function PortalHome() {
   const token = useShopToken();
   const session = usePortalSession();
   const account = useQuery({
@@ -75,7 +76,7 @@ function PortalHome() {
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {(shop.data?.products ?? []).slice(0, 4).map((product) => (
-            <a key={product.id} href={`/store/${shop.data?.slug || "manage-tech-service"}/${product.sku}`} className="shop-card group grid overflow-hidden rounded-2xl border border-white/80 bg-surface/95 shadow-[0_12px_32px_rgba(0,57,112,0.06)]">
+            <a key={product.id} href={catalogHref(shop.data?.slug || "manage-tech-service", product.sku)} className="shop-card group grid overflow-hidden rounded-2xl border border-white/80 bg-surface/95 shadow-[0_12px_32px_rgba(0,57,112,0.06)]">
               <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-b from-white to-surface-2">
                 {product.imageUrl ? <img src={product.imageUrl} alt="" className="max-h-[86%] max-w-[86%] object-contain object-center" /> : <div className="size-12 rounded-2xl bg-white/70" />}
               </div>

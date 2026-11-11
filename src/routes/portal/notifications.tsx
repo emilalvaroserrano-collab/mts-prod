@@ -7,7 +7,7 @@ export const Route = createFileRoute("/portal/notifications")({
   component: NoticesPage,
 });
 
-function NoticesPage() {
+export function NoticesPage() {
   const token = useShopToken();
   const client = useQueryClient();
   const notices = useQuery({

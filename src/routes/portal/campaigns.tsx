@@ -7,7 +7,7 @@ export const Route = createFileRoute("/portal/campaigns")({
   component: CampaignsPage,
 });
 
-function CampaignsPage() {
+export function CampaignsPage() {
   const token = useShopToken();
   const campaigns = useQuery({ queryKey: ["campaigns", token], queryFn: () => listCampaigns({ data: token }), enabled: Boolean(token) });
   return (

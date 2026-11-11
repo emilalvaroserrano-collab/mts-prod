@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { getShopAccount } from "@/lib/portal/api";
 import { money } from "@/lib/portal/format";
 import { useShopToken } from "@/lib/portal/shop-session";
@@ -8,8 +8,8 @@ export const Route = createFileRoute("/portal/orders/$orderId")({
   component: OrderDetail,
 });
 
-function OrderDetail() {
-  const { orderId } = Route.useParams();
+export function OrderDetail() {
+  const { orderId = "" } = useParams({ strict: false });
   const token = useShopToken();
   const account = useQuery({ queryKey: ["shop-account", token], queryFn: () => getShopAccount({ data: token }), enabled: Boolean(token) });
   const order = account.data?.orders.find((item) => item.id === Number(orderId));

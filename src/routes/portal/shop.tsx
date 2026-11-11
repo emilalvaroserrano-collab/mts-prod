@@ -7,6 +7,7 @@ import { getStorefront, orderCatalogService, orderPortalOffering } from "@/lib/p
 import { money } from "@/lib/portal/format";
 import { ORDER_MENU, type OrderCategoryId } from "@/lib/portal/order-menu";
 import { useShopToken } from "@/lib/portal/shop-session";
+import { catalogHref, checkoutHref } from "@/lib/portal/paths";
 import { addToCart } from "@/lib/portal/store-cart";
 
 export const Route = createFileRoute("/portal/shop")({
@@ -112,7 +113,7 @@ function ServiceMenu({
   );
 }
 
-function OrderPage() {
+export function OrderPage() {
   const token = useShopToken();
   const shop = useQuery({ queryKey: ["storefront"], queryFn: () => getStorefront() });
   const [tab, setTab] = useState<"equipment" | "services">("equipment");
@@ -205,7 +206,7 @@ function OrderPage() {
           </div>
           <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3">
             {visible.map((product) => (
-              <a key={product.id} href={`/store/${slug}/${product.sku}`} className="shop-card group grid overflow-hidden rounded-2xl border border-white/80 bg-surface/95 shadow-[0_12px_32px_rgba(0,57,112,0.06)]">
+              <a key={product.id} href={catalogHref(slug, product.sku)} className="shop-card group grid overflow-hidden rounded-2xl border border-white/80 bg-surface/95 shadow-[0_12px_32px_rgba(0,57,112,0.06)]">
                 <div className="flex aspect-[4/3] items-center justify-center bg-gradient-to-b from-white to-surface-2">
                   {product.imageUrl ? <img src={product.imageUrl} alt="" className="max-h-[86%] max-w-[86%] object-contain object-center" /> : <div className="size-16 rounded-2xl bg-white/70" />}
                 </div>
@@ -344,7 +345,7 @@ function OrderPage() {
               <textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="min-h-24 rounded-xl border border-line bg-white px-3 py-2" />
             </label>
             {error ? <p className="text-sm text-bad">{error}</p> : null}
-            {done ? <p className="text-sm">{done} {shipPhone ? <a className="font-medium text-accent" href={`/store/${slug}/checkout`}>Checkout the phone</a> : null}</p> : null}
+            {done ? <p className="text-sm">{done} {shipPhone ? <a className="font-medium text-accent" href={checkoutHref(slug)}>Checkout the phone</a> : null}</p> : null}
             <button type="submit" disabled={place.isPending || !token || !selection} className="h-11 rounded-xl bg-ink px-4 text-sm font-medium text-white disabled:opacity-50">
               {place.isPending ? "Sending" : "Submit order"}
             </button>

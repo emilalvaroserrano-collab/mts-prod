@@ -8,7 +8,7 @@ export const Route = createFileRoute("/portal/services/")({
   component: PortalServices,
 });
 
-function PortalServices() {
+export function PortalServices() {
   const session = usePortalSession();
   const catalog = useQuery({ queryKey: ["service-catalog"], queryFn: () => listServiceCatalog() });
   const [q, setQ] = useState("");

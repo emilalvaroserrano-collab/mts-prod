@@ -9,7 +9,7 @@ export const Route = createFileRoute("/portal/quotes")({
   component: QuotesPage,
 });
 
-function QuotesPage() {
+export function QuotesPage() {
   const token = useShopToken();
   const client = useQueryClient();
   const session = usePortalSession();

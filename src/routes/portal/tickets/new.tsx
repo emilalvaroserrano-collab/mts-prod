@@ -23,7 +23,7 @@ const CATEGORIES = [
   "Other IT Issue",
 ];
 
-function NewTicket() {
+export function NewTicket() {
   const token = useShopToken();
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -40,7 +40,8 @@ function NewTicket() {
     onSuccess: (result) => {
       void client.invalidateQueries({ queryKey: ["portal-session", token] });
       if (result.warning && !result.zendeskId) setNotice(result.warning);
-      void navigate({ to: "/portal/tickets/$ticketId", params: { ticketId: String(result.ticketId) } });
+      const base = window.location.pathname.startsWith("/production/user-portal") ? "/production/user-portal" : "/portal";
+      void navigate({ to: `${base}/tickets/$ticketId` as "/portal/tickets/$ticketId", params: { ticketId: String(result.ticketId) } });
     },
     onError: (error) => setNotice(error instanceof Error ? error.message : "Could not open the ticket."),
   });

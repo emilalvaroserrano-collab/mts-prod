@@ -5,7 +5,7 @@ export const Route = createFileRoute("/portal/tickets/")({
   component: TicketList,
 });
 
-function TicketList() {
+export function TicketList() {
   const session = usePortalSession();
   const tickets = session.data?.tickets ?? [];
   return (

@@ -10,7 +10,7 @@ export const Route = createFileRoute("/portal/billing")({
   component: BillingPage,
 });
 
-function BillingPage() {
+export function BillingPage() {
   const token = useShopToken();
   const session = usePortalSession();
   const account = useQuery({ queryKey: ["shop-account", token], queryFn: () => getShopAccount({ data: token }), enabled: Boolean(token) });

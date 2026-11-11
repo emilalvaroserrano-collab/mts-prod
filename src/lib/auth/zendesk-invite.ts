@@ -8,23 +8,36 @@ let tokenCache: { token: string; expiresAt: number } | null = null;
 
 async function zendeskToken() {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 15_000) return tokenCache.token;
-  const response = await fetch(`https://${subdomain}.zendesk.com/oauth/tokens`, {
-    method: "POST",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      grant_type: "client_credentials",
-      client_id: clientId,
-      client_secret: clientSecret,
-      scope: "read",
-    }),
-  });
-  const text = await response.text();
-  if (!response.ok) throw new Error("Invitation check is unavailable.");
-  const parsed = JSON.parse(text) as { access_token?: string; expires_in?: number };
-  if (!parsed.access_token) throw new Error("Invitation check is unavailable.");
-  const ttl = typeof parsed.expires_in === "number" && parsed.expires_in > 60 ? parsed.expires_in * 1000 : 30 * 60 * 1000;
-  tokenCache = { token: parsed.access_token, expiresAt: Date.now() + ttl };
-  return parsed.access_token;
+  const hosts = [...new Set([subdomain || "mts-portal", "mts-portal"])];
+  let last = "Invitation check is unavailable.";
+  for (const host of hosts) {
+    const response = await fetch(`https://${host}.zendesk.com/oauth/tokens`, {
+      method: "POST",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({
+        grant_type: "client_credentials",
+        client_id: clientId,
+        client_secret: clientSecret,
+        scope: "read",
+      }),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      last = `Zendesk OAuth returned ${response.status}.`;
+      if (response.status === 404) continue;
+      throw new Error(last);
+    }
+    const parsed = JSON.parse(text) as { access_token?: string; expires_in?: number };
+    if (!parsed.access_token) throw new Error("Invitation check is unavailable.");
+    const ttl = typeof parsed.expires_in === "number" && parsed.expires_in > 60 ? parsed.expires_in * 1000 : 30 * 60 * 1000;
+    tokenCache = { token: parsed.access_token, expiresAt: Date.now() + ttl };
+    return parsed.access_token;
+  }
+  throw new Error(last);
+}
+
+export function zendeskSupportToken() {
+  return zendeskToken();
 }
 
 export async function findZendeskInvite(email: string): Promise<ZendeskInvite | null> {
