@@ -1,5 +1,8 @@
 import { createServerFn } from "@tanstack/react-start";
-import { filePortalTicket, loadPortalCustomer } from "@/lib/portal/api";
+import { ALTERNATIVE_PORTAL, createAlternativeCheckout, loadAlternativeCreds } from "@/lib/portal/alternative";
+import { setInventory } from "@/lib/portal/commerce";
+import { ensureDeskOrganization, filePortalTicket, loadPortalCustomer, settleNewOrder, syncCustomerTicket } from "@/lib/portal/api";
+import { unpaidCardStatus } from "@/lib/portal/security";
 import { lookupKnowledge, pageById } from "@/lib/portal/knowledge";
 import { affirms, declines, planUtterance, spokenFallback, type Offering, type Planned } from "@/lib/portal/sarah-plan";
 import { allowTransition, confirmationFresh, confirmSnapshot, followUp, listPick, phoneChoice, quoteFor, receiptAmount, reconcileDecision, type SarahQuote, type SarahReceipt, type SarahSlots } from "@/lib/portal/sarah-state";
@@ -8,11 +11,13 @@ type Guide = { to: "/portal" | "/portal/tickets" | "/portal/tickets/new" | "/por
 
 function pageFor(planned: Planned): Guide | null {
   const id =
-    planned.tool === "list_tickets" || planned.tool === "open_ticket" || planned.tool === "reply_ticket" ? "tickets"
-    : planned.tool === "list_orders" ? "orders"
-    : planned.tool === "find_equipment" || planned.tool === "order_service" ? "shop"
+    planned.tool === "list_tickets" || planned.tool === "open_ticket" || planned.tool === "reply_ticket" || planned.tool === "ticket_detail" || planned.tool === "close_ticket" || planned.tool === "refresh_ticket" ? "tickets"
+    : planned.tool === "list_orders" || planned.tool === "order_detail" || planned.tool === "cancel_order" || planned.tool === "pay_order" || planned.tool === "place_order" ? "orders"
+    : planned.tool === "find_equipment" || planned.tool === "order_service" || planned.tool === "list_catalog" ? "shop"
     : planned.tool === "complaint" ? "complaints"
-    : planned.tool === "account" || planned.tool === "update_contact" ? "account"
+    : planned.tool === "account" || planned.tool === "update_contact" || planned.tool === "update_company" ? "account"
+    : planned.tool === "list_billing" ? "billing"
+    : planned.tool === "list_notices" || planned.tool === "read_notice" ? "notifications"
     : planned.tool === "list_requests" ? "services"
     : "";
   if (!id) return null;
@@ -96,6 +101,7 @@ async function runTool(token: string, planned: Planned, approved = false): Promi
     return {
       summary: `${firstName(name)}, here are the recent orders.`,
       cards: orders.map((item) => ({ title: `MT-${1000 + n(item, "id")}`, detail: `${s(item, "status")} · payment ${s(item, "payment_status") || "pending"} · ${s(item, "shipment_status") || "not shipped"}` })),
+      refs: orders.map((item) => n(item, "id")),
     };
   }
   if (planned.tool === "list_requests") {
@@ -196,7 +202,207 @@ async function runTool(token: string, planned: Planned, approved = false): Promi
       cartSku: planned.shipPhone ? "desk-phone" : undefined,
     };
   }
+  if (planned.tool === "list_catalog") {
+    const products = await sql<Row>`select sku, name, price_cents from products where available = true order by name limit 12`;
+    if (!products.length) return { summary: "The catalog is empty right now.", cards: [] };
+    return { summary: `${firstName(name)}, here is what is in the shop.`, cards: products.map((item) => ({ title: s(item, "name"), detail: `${s(item, "sku")} · $${(n(item, "price_cents") / 100).toFixed(2)}` })) };
+  }
+  if (planned.tool === "list_billing") {
+    const orders = await sql<Row>`
+      select o.id, o.payment_method, o.payment_status,
+        coalesce((select sum(oi.quantity * oi.unit_price_cents)::int from order_items oi where oi.order_id = o.id), 0) + coalesce(o.shipping_cents, 0) as total_cents
+      from orders o
+      where o.shop_customer_id = ${id} or lower(o.ship_email) = lower(${email})
+      order by o.created_at desc limit 8
+    `;
+    if (!orders.length) return { summary: `${firstName(name)}, there is nothing on the billing page yet.`, cards: [] };
+    return { summary: `${firstName(name)}, here is the billing on this account.`, cards: orders.map((item) => ({ title: `MT-${1000 + n(item, "id")}`, detail: `${s(item, "payment_method") || "unpaid"} · $${(n(item, "total_cents") / 100).toFixed(2)}` })) };
+  }
+  if (planned.tool === "list_notices") {
+    const notices = await sql<Row>`select id, title, body from customer_notices where shop_customer_id = ${id} order by created_at desc limit 8`;
+    if (!notices.length) return { summary: `${firstName(name)}, there are no notifications.`, cards: [] };
+    return { summary: `${firstName(name)}, here are the notifications.`, cards: notices.map((item) => ({ title: s(item, "title"), detail: s(item, "body") })), refs: notices.map((item) => n(item, "id")) };
+  }
+  if (planned.tool === "read_notice") {
+    const notices = await sql<Row>`select id, title from customer_notices where id = ${planned.id} and shop_customer_id = ${id}`;
+    if (!notices[0]) return { summary: "That notification is not on this account." };
+    await sql`update customer_notices set read_at = now() where id = ${planned.id} and shop_customer_id = ${id}`;
+    return { summary: `I marked “${s(notices[0], "title")}” as read.` };
+  }
+  if (planned.tool === "ticket_detail" || planned.tool === "refresh_ticket") {
+    if (planned.tool === "refresh_ticket") await syncCustomerTicket(sql, email, planned.id).catch(() => null);
+    const tickets = await sql<Row>`select id, subject, status, zendesk_id from tickets where id = ${planned.id} and lower(requester_email) = lower(${email})`;
+    if (!tickets[0]) return { summary: "I can't find that ticket on this account." };
+    const comments = await sql<Row>`select author_name, body from ticket_comments where ticket_id = ${planned.id} and public_note = true order by created_at desc limit 3`;
+    const latest = comments[0] ? ` Latest note: ${s(comments[0], "body").slice(0, 180)}` : "";
+    return { summary: `Ticket ${planned.id} is ${s(tickets[0], "status")}: ${s(tickets[0], "subject")}.${s(tickets[0], "zendesk_id") ? ` Zendesk ${s(tickets[0], "zendesk_id")}.` : ""}${latest}` };
+  }
+  if (planned.tool === "close_ticket") {
+    const tickets = await sql<Row>`select id, subject from tickets where id = ${planned.id} and lower(requester_email) = lower(${email})`;
+    if (!tickets[0]) return { summary: "I can't find that ticket on this account." };
+    if (!approved) return { summary: `${firstName(name)}, I can close ticket ${planned.id}, ${s(tickets[0], "subject")}. Press Confirm and I will close it.`, needsConfirm: planned };
+    await sql`update tickets set status = 'closed', updated_at = now() where id = ${planned.id}`;
+    return { summary: `Ticket ${planned.id} is closed.` };
+  }
+  if (planned.tool === "order_detail") {
+    const orders = await sql<Row>`
+      select id, status, payment_status, shipment_status, tracking_number, payment_url
+      from orders where id = ${planned.id} and (shop_customer_id = ${id} or lower(ship_email) = lower(${email}))
+    `;
+    if (!orders[0]) return { summary: "That order is not on this account." };
+    const item = orders[0];
+    return { summary: `Order MT-${1000 + planned.id} is ${s(item, "status")}. Payment ${s(item, "payment_status") || "pending"}. Shipment ${s(item, "shipment_status") || "not shipped"}.${s(item, "tracking_number") ? ` Tracking ${s(item, "tracking_number")}.` : ""}` };
+  }
+  if (planned.tool === "cancel_order") {
+    const orders = await sql<Row>`select id, status, shipment_status from orders where id = ${planned.id} and (shop_customer_id = ${id} or lower(ship_email) = lower(${email}))`;
+    if (!orders[0]) return { summary: "That order is not on this account." };
+    if (["shipped", "out_for_delivery", "delivered"].includes(s(orders[0], "shipment_status"))) return { summary: "That order has already shipped, so I did not cancel it." };
+    if (!approved) return { summary: `${firstName(name)}, I can cancel order MT-${1000 + planned.id}. Press Confirm and I will cancel it.`, needsConfirm: planned };
+    await sql`update orders set status = 'cancelled', updated_at = now() where id = ${planned.id}`;
+    await setInventory(sql, planned.id, "released");
+    const copy = await deskCopy(sql, { name, email, organizationId: orgId, subject: `Mike cancelled order MT-${1000 + planned.id}`, category: "Ordering", body: `The customer asked Mike to cancel order MT-${1000 + planned.id}.` });
+    return { summary: `Order MT-${1000 + planned.id} is cancelled.${copy}` };
+  }
+  if (planned.tool === "pay_order") {
+    const orders = await sql<Row>`select id, payment_method, payment_status, payment_url from orders where id = ${planned.id} and (shop_customer_id = ${id} or lower(ship_email) = lower(${email}))`;
+    if (!orders[0]) return { summary: "That order is not on this account." };
+    if (s(orders[0], "payment_method") === "pay_later" || s(orders[0], "payment_status") === "pay_later") return { summary: `Order MT-${1000 + planned.id} is on invoice. No card payment is due.` };
+    let paymentUrl = s(orders[0], "payment_url");
+    if (!paymentUrl) {
+      const lines = await sql<Row>`select product_name, quantity, unit_price_cents from order_items where order_id = ${planned.id}`;
+      const creds = await loadAlternativeCreds(sql);
+      if (!creds) return { summary: "Card checkout is not configured yet. I can leave the order on the account." };
+      const due = new Date();
+      due.setDate(due.getDate() + 30);
+      const checkout = await createAlternativeCheckout(creds, {
+        reference: `MT-${1000 + planned.id}`,
+        returnUrl: ALTERNATIVE_PORTAL,
+        externalId: `mts-shop-${email}`,
+        name,
+        email,
+        existingCustomerId: "",
+        dueDate: due.toISOString().slice(0, 10),
+        lines: lines.map((line) => ({ description: s(line, "product_name"), amount: n(line, "unit_price_cents") / 100, quantity: n(line, "quantity") })),
+      });
+      paymentUrl = checkout.url || ALTERNATIVE_PORTAL;
+      await sql`update orders set payment_url = ${paymentUrl}, alternative_invoice_id = ${checkout.invoiceId}, alternative_request_id = ${checkout.requestId}, payment_status = ${checkout.paymentStatus} where id = ${planned.id}`;
+    }
+    return { summary: `The payment page for order MT-${1000 + planned.id} is ready. I do not take card numbers. Open ${paymentUrl}` };
+  }
+  if (planned.tool === "place_order") {
+    if (!access.canShop && !access.canPurchase) return { summary: "This account can't place shop orders. I didn't send one." };
+    const product = await sql<Row>`select * from products where available = true and sku = ${planned.sku} limit 1`;
+    if (!product[0]) return { summary: `${planned.sku} is not in the catalog. I can look it up if you tell me the product name.` };
+    const address = s(row, "address");
+    const city = s(row, "city");
+    const postal = s(row, "postal");
+    if (!address || !city || !postal) return { summary: `${firstName(name)}, I need a shipping address, city, and postal code on the account before I can place that.` };
+    if (!approved) return { summary: `${firstName(name)}, I can order ${planned.quantity} ${s(product[0], "name")} for $${((n(product[0], "price_cents") * planned.quantity) / 100).toFixed(2)}. Press Confirm and I will place it.`, needsConfirm: planned };
+    const mayDefer = access.canDefer || Boolean(row.pay_later);
+    if (planned.payLater && !mayDefer) return { summary: "This account has to pay before the order is placed. I didn't invoice it." };
+    const method = planned.payLater && mayDefer ? "pay_later" : "card";
+    const organizationId = orgId || (await ensureDeskOrganization(sql));
+    const shippingCents = n(product[0], "price_cents") * planned.quantity >= 50000 ? 0 : 1500;
+    const inserted = await sql<Row>`
+      insert into orders (
+        organization_id, customer_user_id, shop_customer_id, status, notes, approval_note, payment_method,
+        ship_name, ship_email, ship_phone, ship_address, ship_city, ship_region, ship_postal, ship_country,
+        shipping_method, shipping_cents, shipment_status
+      ) values (
+        ${organizationId}, null, ${id}, 'pending', 'Placed by Mike.', 'Placed by Mike for the signed-in customer.', ${method},
+        ${name}, ${email}, ${s(row, "phone")}, ${address}, ${city}, ${s(row, "region")}, ${postal}, ${s(row, "country") || "United States"},
+        'standard', ${shippingCents}, 'unfulfilled'
+      )
+      returning id
+    `;
+    const orderId = n(inserted[0], "id");
+    await sql`
+      insert into order_items (order_id, product_id, product_name, sku, quantity, unit_price_cents)
+      values (${orderId}, ${n(product[0], "id")}, ${s(product[0], "name")}, ${s(product[0], "sku")}, ${planned.quantity}, ${n(product[0], "price_cents")})
+    `;
+    let paymentUrl = "";
+    await sql`update orders set payment_status = ${method === "pay_later" ? "pay_later" : unpaidCardStatus()} where id = ${orderId}`;
+    if (method === "card") {
+      const creds = await loadAlternativeCreds(sql);
+      if (creds) {
+        try {
+          const due = new Date();
+          due.setDate(due.getDate() + 30);
+          const checkout = await createAlternativeCheckout(creds, {
+            reference: `MT-${1000 + orderId}`,
+            returnUrl: ALTERNATIVE_PORTAL,
+            externalId: `mts-shop-${email}`,
+            name,
+            email,
+            existingCustomerId: "",
+            dueDate: due.toISOString().slice(0, 10),
+            lines: [{ description: s(product[0], "name"), amount: n(product[0], "price_cents") / 100, quantity: planned.quantity }],
+          });
+          paymentUrl = checkout.url || ALTERNATIVE_PORTAL;
+          await sql`update orders set payment_url = ${paymentUrl}, alternative_invoice_id = ${checkout.invoiceId}, alternative_request_id = ${checkout.requestId}, payment_status = ${checkout.paymentStatus} where id = ${orderId}`;
+        } catch {
+          paymentUrl = ALTERNATIVE_PORTAL;
+        }
+      }
+    }
+    await settleNewOrder(sql, orderId, "Mike").catch(() => undefined);
+    const copy = await deskCopy(sql, { name, email, organizationId: orgId, subject: `Shop order MT-${1000 + orderId}`, category: "Hardware & Software", body: `Mike placed ${planned.quantity} × ${planned.sku} for ${name}.` });
+    return { summary: `Order MT-${1000 + orderId} is placed.${method === "pay_later" ? " It is on invoice." : paymentUrl ? ` Pay here: ${paymentUrl}` : " Payment is still due."}${copy}` };
+  }
+  if (planned.tool === "update_company") {
+    if (!planned.business) return { summary: "What company name should I put on the account?" };
+    if (!approved) return { summary: `${firstName(name)}, I can set the company to ${planned.business}. Press Confirm and I will update it.`, needsConfirm: planned };
+    let organizationId = orgId;
+    const phone = planned.phone || s(row, "phone");
+    const city = planned.city || s(row, "city");
+    if (organizationId) await sql`update organizations set name = ${planned.business}, phone = ${phone} where id = ${organizationId}`;
+    else {
+      const created = await sql<Row>`insert into organizations (name, phone, portal_access, ordering_enabled, notes) values (${planned.business}, ${phone}, true, true, 'Updated by Mike.') returning id`;
+      organizationId = n(created[0], "id");
+    }
+    await sql`update shop_customers set business_name = ${planned.business}, phone = ${phone}, city = ${city}, organization_id = ${organizationId} where id = ${id}`;
+    const copy = await deskCopy(sql, { name, email, organizationId, subject: `Company update: ${planned.business}`, category: "Account", body: `Mike updated the company to ${planned.business}.` });
+    return { summary: `The company on this account is now ${planned.business}.${copy}` };
+  }
   return { summary: "Tell me what you need and I will take care of it on this account." };
+}
+
+type ToolResult = Awaited<ReturnType<typeof runTool>>;
+
+function skuOf(result: ToolResult) {
+  if (result.cartSku) return result.cartSku;
+  if (result.cards?.length !== 1) return "";
+  return result.cards[0].detail.split(" · ")[0] || "";
+}
+
+/** One lookup result becomes the next tool's argument. A confirm gate ends the chain. */
+function followOn(text: string, planned: Planned, result: ToolResult): Planned | null {
+  if (result.needsConfirm) return null;
+  const q = text.toLowerCase();
+  if (planned.tool === "find_equipment" && /\b(order|buy|place|get me|i'll take|ill take)\b/.test(q)) {
+    const sku = skuOf(result);
+    if (sku && result.cards?.length === 1) return { tool: "place_order", sku, quantity: 1, payLater: /\b(invoice|pay later|bill me)\b/.test(q) };
+  }
+  const only = result.refs?.length === 1 ? result.refs[0] : 0;
+  if (!only) return null;
+  if (planned.tool === "list_orders" && /\bcancel\b/.test(q)) return { tool: "cancel_order", id: only };
+  if (planned.tool === "list_orders" && /\b(pay|payment link|checkout)\b/.test(q)) return { tool: "pay_order", id: only };
+  if (planned.tool === "list_tickets" && /\bclose\b/.test(q)) return { tool: "close_ticket", id: only };
+  if (planned.tool === "list_notices" && /\b(read|open|mark)\b/.test(q)) return { tool: "read_notice", id: only };
+  return null;
+}
+
+async function runChain(token: string, planned: Planned, text: string) {
+  const first = await runTool(token, planned);
+  const next = followOn(text, planned, first);
+  if (!next) return first;
+  const second = await runTool(token, next);
+  return {
+    ...second,
+    cards: second.cards?.length ? second.cards : first.cards,
+    show: second.show ?? first.show,
+    navigate: second.navigate ?? first.navigate,
+  };
 }
 
 async function deskCopy(
@@ -434,7 +640,19 @@ const TOOLS = [
   { type: "function", function: { name: "order_service", description: "Order a portal service for this customer. voip-ext needs confirmMonthly true only after they agree to $18 a month. wiring needs confirmMonthly true only after they agree to $175 per drop.", parameters: { type: "object", properties: { offering: { type: "string", enum: ["network", "voip-line", "voip-ext", "fax-physical", "fax-efax", "internet-spectrum", "internet-att", "internet-frontier", "internet-fixed", "wiring"] }, site: { type: "string" }, notes: { type: "string" }, recipientEmail: { type: "string" }, drops: { type: "number" }, shipPhone: { type: "boolean" }, confirmMonthly: { type: "boolean" } }, required: ["offering"] } } },
   { type: "function", function: { name: "complaint", description: "File a complaint for this customer.", parameters: { type: "object", properties: { subject: { type: "string" }, body: { type: "string" } }, required: ["subject", "body"] } } },
   { type: "function", function: { name: "update_contact", description: "Update this customer's phone number.", parameters: { type: "object", properties: { phone: { type: "string" } }, required: ["phone"] } } },
-  { type: "function", function: { name: "find_equipment", description: "Find a catalog product for this customer.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
+  { type: "function", function: { name: "find_equipment", description: "Find a catalog product for this customer. Set add true only when they asked to put it in the cart.", parameters: { type: "object", properties: { query: { type: "string" }, add: { type: "boolean" } }, required: ["query"] } } },
+  { type: "function", function: { name: "list_catalog", description: "List equipment currently for sale.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "place_order", description: "Place a shop order for this customer from a catalog SKU. Requires Confirm. Use payLater only if they asked to be invoiced.", parameters: { type: "object", properties: { sku: { type: "string" }, quantity: { type: "number" }, payLater: { type: "boolean" } }, required: ["sku"] } } },
+  { type: "function", function: { name: "order_detail", description: "Read one order on this account, including shipment and payment.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "cancel_order", description: "Cancel an unshipped order on this account. Requires Confirm.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "pay_order", description: "Get the payment link for an order. Never ask for or accept a card number.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "list_billing", description: "List invoices and payment status for this account.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "list_notices", description: "List this customer's notifications.", parameters: { type: "object", properties: {} } } },
+  { type: "function", function: { name: "read_notice", description: "Mark one notification read.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "ticket_detail", description: "Read one ticket and its latest public notes.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "close_ticket", description: "Close one of this customer's tickets. Requires Confirm.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "refresh_ticket", description: "Pull the latest Zendesk status for one ticket.", parameters: { type: "object", properties: { id: { type: "number" } }, required: ["id"] } } },
+  { type: "function", function: { name: "update_company", description: "Update this customer's company name, phone, and city. Requires Confirm.", parameters: { type: "object", properties: { business: { type: "string" }, phone: { type: "string" }, city: { type: "string" } }, required: ["business"] } } },
   { type: "function", function: { name: "lookup_kb", description: "Look up how Manage Tech Service and this portal work.", parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } } },
   { type: "function", function: { name: "show_page", description: "Open a portal page and point at it while speaking. page is home, tickets, new-ticket, shop, orders, billing, complaints, organization, account, services, quotes, or notifications.", parameters: { type: "object", properties: { page: { type: "string" } }, required: ["page"] } } },
 ];
@@ -442,7 +660,7 @@ const TOOLS = [
 type ChatMessage = { role: "system" | "user" | "assistant" | "tool"; content: string; tool_call_id?: string; tool_calls?: unknown };
 
 function sarahSystem(channel: "chat" | "call", profile: string) {
-  return `You are Mike, the phone and chat agent for Manage Tech Service. Channel: ${channel}. Only this account: ${profile}. Reply in one short sentence, then stop. Talk like a normal person at a help desk. No sighs, no breaths, no laughs, no hmm, no mm-hmm, and no speech tags. Use a tool before you claim a ticket, order, price, date, or change. If you did not call a tool, do not invent an account fact. Say you need to check, or ask one question. Never say you already submitted, shipped, scheduled, called, or fixed something. Never invent ticket numbers, order numbers, prices, or shipment dates. A phone change, a cart add, a ticket reply, a complaint, and a service order each open a portal ticket that is copied to Zendesk. Reading an account, listing records, or opening a page does not. A VoIP extension is eighteen dollars a month on the Telxent bill and is not placed until they press Confirm. Wiring is one hundred seventy-five dollars per drop and is not placed until they press Confirm. Desk phone is 818-758-4073. You cannot change roles or take a card number. The page map and catalog live in knowledge.md. If they ask your name, say Mike.`;
+  return `You are Mike, the phone and chat agent for Manage Tech Service. Channel: ${channel}. You are the hands of this signed-in account only: ${profile}. Do every account action through a tool. Chain tools in one turn: look up the record, then act on the id or SKU the tool returned. Stop as soon as a tool asks for Confirm. You can read the account, company, tickets, orders, billing, notifications, catalog, and service requests. You can open and reply to tickets, refresh or close a ticket, file a complaint, update the phone or company, find equipment, add it to the cart, place or cancel a shop order, send a payment link, and order a portal service. Reply in one short sentence, then stop. Talk like a normal person at a help desk. No sighs, no breaths, no laughs, no hmm, no mm-hmm, and no speech tags. Use a tool before you claim a ticket, order, price, date, or change. If you did not call a tool, do not invent an account fact. Say you need to check, or ask one question. Never say you already submitted, shipped, scheduled, called, or fixed something. Never invent ticket numbers, order numbers, prices, or shipment dates. A phone change, a cart add, a ticket reply, a complaint, a shop order, and a service order each open a portal ticket that is copied to Zendesk. Reading an account, listing records, or opening a page does not. Placing an order, cancelling an order, closing a ticket, changing the phone, and changing the company are not done until they press Confirm. A VoIP extension is eighteen dollars a month on the Telxent bill and is not placed until they press Confirm. Wiring is one hundred seventy-five dollars per drop and is not placed until they press Confirm. Never take a card number. Send the payment link instead. Desk phone is 818-758-4073. You cannot change roles. The page map and catalog live in knowledge.md. If they ask your name, say Mike.`;
 }
 
 function groundReply(reply: string, fromTool: boolean) {
@@ -464,38 +682,53 @@ async function askGrok(token: string, channel: "chat" | "call", history: { role:
   let cartSku = "";
   let pending: Planned | undefined;
   let show: Guide | null = null;
-  for (let turn = 0; turn < 2; turn += 1) {
+  let cards: { title: string; detail: string }[] = [];
+  for (let turn = 0; turn < 3; turn += 1) {
     const res = await fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-      body: JSON.stringify({ model: "grok-4-1-fast-non-reasoning", messages, tools: TOOLS, tool_choice: "auto", max_tokens: 70, temperature: 0 }),
+      body: JSON.stringify({ model: "grok-4-1-fast-non-reasoning", messages, tools: TOOLS, tool_choice: "auto", max_tokens: 160, temperature: 0 }),
     });
-    if (!res.ok) return last ? { reply: last, cartSku: cartSku || undefined, pending, show } : null;
+    if (!res.ok) return last ? { reply: last, cartSku: cartSku || undefined, pending, show, cards } : null;
     const body = (await res.json()) as { choices?: { message?: ChatMessage & { tool_calls?: { id: string; function?: { name?: string; arguments?: string | Record<string, unknown> }; name?: string; arguments?: string | Record<string, unknown> }[] } }[] };
     const message = body.choices?.[0]?.message;
-    if (!message) return last ? { reply: last, cartSku: cartSku || undefined, pending, show } : null;
+    if (!message) return last ? { reply: last, cartSku: cartSku || undefined, pending, show, cards } : null;
     const calls = message.tool_calls ?? [];
     if (!calls.length) {
       const spoken = last || message.content || "How else can I help?";
-      return { reply: groundReply(spoken, Boolean(last)), cartSku: cartSku || undefined, pending, show };
+      return { reply: groundReply(spoken, Boolean(last)), cartSku: cartSku || undefined, pending, show, cards };
     }
     messages.push(message);
+    let gated = false;
     for (const call of calls) {
+      if (gated) {
+        messages.push({ role: "tool", tool_call_id: call.id, content: "Skipped. A previous tool is waiting for Confirm." });
+        continue;
+      }
       const name = call.function?.name || call.name || "";
       const rawArgs = call.function?.arguments ?? call.arguments ?? {};
       let args: Record<string, unknown> = {};
       if (typeof rawArgs === "string") {
         try { args = JSON.parse(rawArgs) as Record<string, unknown>; } catch { args = {}; }
       } else args = rawArgs;
-      const result = await runTool(token, toolFromModel(name, args));
+      const planned = toolFromModel(name, args);
+      const asked = history.filter((item) => item.role === "user").at(-1)?.content || "";
+      const result = await runChain(token, planned, asked);
       last = result.summary;
+      if (result.cards?.length) cards = result.cards;
       if (result.cartSku) cartSku = result.cartSku;
       if (result.needsConfirm) pending = result.needsConfirm;
       if (result.navigate && result.show) show = result.show;
-      messages.push({ role: "tool", tool_call_id: call.id, content: result.summary });
+      messages.push({
+        role: "tool",
+        tool_call_id: call.id,
+        content: JSON.stringify({ summary: result.summary, sku: result.cartSku || skuOf(result), ids: result.refs || [], needsConfirm: Boolean(result.needsConfirm) }),
+      });
+      if (result.needsConfirm) gated = true;
     }
+    if (gated) return { reply: last, cartSku: cartSku || undefined, pending, show, cards };
   }
-  return last ? { reply: last, cartSku: cartSku || undefined, pending, show } : null;
+  return last ? { reply: last, cartSku: cartSku || undefined, pending, show, cards } : null;
 }
 
 function toolFromModel(name: string, args: Record<string, unknown>): Planned {
@@ -509,7 +742,19 @@ function toolFromModel(name: string, args: Record<string, unknown>): Planned {
   if (name === "reply_ticket") return { tool: "reply_ticket", id: Number(args.id) || 0, body: String(args.body || "").slice(0, 2000) };
   if (name === "complaint") return { tool: "complaint", subject: String(args.subject || "Complaint").slice(0, 160), body: String(args.body || "").slice(0, 2000) };
   if (name === "update_contact") return { tool: "update_contact", phone: String(args.phone || "").slice(0, 40) };
-  if (name === "find_equipment") return { tool: "find_equipment", query: String(args.query || "").slice(0, 80), add: false };
+  if (name === "find_equipment") return { tool: "find_equipment", query: String(args.query || "").slice(0, 80), add: Boolean(args.add) };
+  if (name === "list_catalog") return { tool: "list_catalog" };
+  if (name === "place_order") return { tool: "place_order", sku: String(args.sku || "").slice(0, 40), quantity: Math.min(99, Math.max(1, Number(args.quantity) || 1)), payLater: Boolean(args.payLater) };
+  if (name === "order_detail") return { tool: "order_detail", id: Number(args.id) || 0 };
+  if (name === "cancel_order") return { tool: "cancel_order", id: Number(args.id) || 0 };
+  if (name === "pay_order") return { tool: "pay_order", id: Number(args.id) || 0 };
+  if (name === "list_billing") return { tool: "list_billing" };
+  if (name === "list_notices") return { tool: "list_notices" };
+  if (name === "read_notice") return { tool: "read_notice", id: Number(args.id) || 0 };
+  if (name === "ticket_detail") return { tool: "ticket_detail", id: Number(args.id) || 0 };
+  if (name === "close_ticket") return { tool: "close_ticket", id: Number(args.id) || 0 };
+  if (name === "refresh_ticket") return { tool: "refresh_ticket", id: Number(args.id) || 0 };
+  if (name === "update_company") return { tool: "update_company", business: String(args.business || "").slice(0, 160), phone: String(args.phone || "").slice(0, 40), city: String(args.city || "").slice(0, 80) };
   if (name === "order_service") {
     const offering = String(args.offering || "network") as Offering;
     return {
@@ -608,7 +853,7 @@ export async function runSarahTurn(data: {
       return { reply: "Before I price that, do you need a desk phone shipped, or just the extension?", cartSku: "", actionId: "", show: null, navigate: false, cards: [] as { title: string; detail: string }[], notice, quote: null as SarahQuote | null };
     }
     if (actionable) {
-      const result = await runTool(data.token, planned, false);
+      const result = await runChain(data.token, planned, data.text);
       const actionId = result.needsConfirm ? await holdConfirm(sql, customerId, result.needsConfirm) : "";
       if (planned.tool === "order_service") await writeSlots(sql, customerId, { offering: planned.offering, drops: planned.drops, site: planned.site }).catch(() => undefined);
       if (planned.tool === "list_tickets" && result.refs) await writeSlots(sql, customerId, { ticketIds: result.refs }).catch(() => undefined);
@@ -617,7 +862,7 @@ export async function runSarahTurn(data: {
     const grok = await askGrok(data.token, data.channel === "call" ? "call" : "chat", [...data.history, { role: "user", content: data.text }], profile).catch(() => null);
     if (grok?.reply) {
       const actionId = grok.pending ? await holdConfirm(sql, customerId, grok.pending) : "";
-      return { reply: grok.reply, cartSku: grok.cartSku || "", actionId, show: grok.show ?? null, navigate: Boolean(grok.show), cards: [] as { title: string; detail: string }[], notice, quote: grok.pending ? quoteFor(grok.pending) : null };
+      return { reply: grok.reply, cartSku: grok.cartSku || "", actionId, show: grok.show ?? null, navigate: Boolean(grok.show), cards: grok.cards || [], notice, quote: grok.pending ? quoteFor(grok.pending) : null };
     }
     const result = await runTool(data.token, { tool: "ask" });
     const held = await openQuote(sql, customerId, data.actionId);

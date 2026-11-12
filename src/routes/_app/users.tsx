@@ -36,7 +36,7 @@ const blank = (): Customer => ({
   payLater: false,
 });
 
-function PeoplePage() {
+export function PeoplePage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["people"], queryFn: () => getPeople() });
   const [draft, setDraft] = useState<Customer | null>(null);

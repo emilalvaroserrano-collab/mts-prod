@@ -75,7 +75,7 @@ export function receiptAmount(cents: number, cadence: string, phone = "") {
   return cadence === "month" ? `${text} per month` : text;
 }
 
-export function confirmSnapshot(planned: { tool: string; offering?: string; drops?: number; phone?: string }) {
+export function confirmSnapshot(planned: { tool: string; offering?: string; drops?: number; phone?: string; sku?: string; quantity?: number; payLater?: boolean; id?: number; business?: string }) {
   if (planned.tool === "order_service" && planned.offering === "voip-ext") {
     return { service: "voip-ext", quantity: 1, amountCents: 1800, cadence: "month", terms: "$18 per month on the Telxent bill. Not active until Telxent confirms." };
   }
@@ -86,12 +86,24 @@ export function confirmSnapshot(planned: { tool: string; offering?: string; drop
   if (planned.tool === "update_contact" && planned.phone) {
     return { service: "phone", quantity: 1, amountCents: 0, cadence: "none", terms: `Replace the account phone with ${planned.phone}.` };
   }
+  if (planned.tool === "place_order") {
+    return { service: planned.sku || "equipment", quantity: planned.quantity || 1, amountCents: 0, cadence: "once", terms: planned.payLater ? "Place this on invoice." : "Place this order for the account." };
+  }
+  if (planned.tool === "cancel_order") {
+    return { service: "cancel-order", quantity: 1, amountCents: 0, cadence: "none", terms: `Cancel order ${planned.id}.` };
+  }
+  if (planned.tool === "close_ticket") {
+    return { service: "close-ticket", quantity: 1, amountCents: 0, cadence: "none", terms: `Close ticket ${planned.id}.` };
+  }
+  if (planned.tool === "update_company") {
+    return { service: "company", quantity: 1, amountCents: 0, cadence: "none", terms: `Update the company to ${planned.business}.` };
+  }
   return null;
 }
 
 export type SarahQuote = { title: string; detail: string; amount: string };
 
-export function quoteFor(planned: { tool: string; offering?: string; drops?: number; phone?: string }): SarahQuote | null {
+export function quoteFor(planned: { tool: string; offering?: string; drops?: number; phone?: string; sku?: string; quantity?: number; payLater?: boolean; id?: number; business?: string }): SarahQuote | null {
   if (planned.tool === "order_service" && planned.offering === "voip-ext") {
     return { title: "VoIP extension", detail: "Added to the Telxent bill only after Telxent confirms. It is not active yet.", amount: "$18 per month" };
   }
@@ -101,6 +113,18 @@ export function quoteFor(planned: { tool: string; offering?: string; drops?: num
   }
   if (planned.tool === "update_contact" && planned.phone) {
     return { title: "Phone number", detail: "This replaces the number on the account.", amount: planned.phone };
+  }
+  if (planned.tool === "place_order") {
+    return { title: "Place order", detail: `${planned.quantity || 1} × ${planned.sku || "item"}. ${planned.payLater ? "Invoice this account." : "A payment link is sent after it is placed."}`, amount: planned.sku || "Equipment" };
+  }
+  if (planned.tool === "cancel_order") {
+    return { title: "Cancel order", detail: "This stops the order if it has not shipped.", amount: `Order ${planned.id}` };
+  }
+  if (planned.tool === "close_ticket") {
+    return { title: "Close ticket", detail: "This marks the ticket closed on the account.", amount: `Ticket ${planned.id}` };
+  }
+  if (planned.tool === "update_company") {
+    return { title: "Company", detail: "This updates the company name on the account.", amount: planned.business || "Company" };
   }
   return null;
 }

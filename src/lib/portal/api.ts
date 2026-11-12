@@ -1,8 +1,11 @@
 import { createServerFn } from "@tanstack/react-start";
+import { publishLive } from "@/lib/portal/live";
+import { DEFAULT_EMAIL_SIGNATURE, htmlMailTemplate, renderSignature, signatureHtml, textMailTemplate } from "@/lib/portal/email-signature";
+import { customerCanFill } from "@/lib/portal/zendesk-field-types";
 import { authMiddleware } from "@/lib/auth/middleware";
-import { zendeskSupportToken } from "@/lib/auth/zendesk-invite";
 import { getSql, type Sql } from "@/lib/db";
 import { storeSlug } from "./format";
+import { pushBillingAddress, pushOrder, pushProduct, syncBillingAddress, syncCommerce } from "./zendesk-commerce";
 import { commentIsPublic, unpaidCardStatus, verificationDecision } from "./security";
 import {
   ALTERNATIVE_PORTAL,
@@ -650,16 +653,20 @@ async function readZendesk(sql: Sql): Promise<ZSettings> {
   const envz = envZendesk();
   const rows = await sql<Row>`select subdomain, email, api_token, oauth_client_id, oauth_client_secret, oauth_scopes from integration_settings where id = 1`;
   const row = rows[0];
-  const storedId = row ? s(row, "oauth_client_id") : "";
-  const storedSecret = row ? s(row, "oauth_client_secret") : "";
+  if (envz.email && envz.apiToken) {
+    return { ...envz, oauthClientId: "", oauthClientSecret: "", fromEnv: true };
+  }
+  if (envz.oauthClientId && envz.oauthClientSecret) {
+    return { ...envz, apiToken: "", fromEnv: true };
+  }
   return {
-    subdomain: envz.subdomain || (row ? cleanSubdomain(s(row, "subdomain")) : "") || "shop",
-    email: envz.email || (row ? s(row, "email") : ""),
-    apiToken: envz.apiToken || (row ? s(row, "api_token") : ""),
-    fromEnv: envz.fromEnv,
-    oauthClientId: envz.oauthClientId || storedId,
-    oauthClientSecret: envz.oauthClientSecret || storedSecret,
-    oauthScopes: envz.oauthClientId ? envz.oauthScopes : row && s(row, "oauth_scopes") ? s(row, "oauth_scopes") : envz.oauthScopes,
+    subdomain: (row ? cleanSubdomain(s(row, "subdomain")) : "") || "mts-portal",
+    email: row ? s(row, "email") : "",
+    apiToken: row ? s(row, "api_token") : "",
+    fromEnv: false,
+    oauthClientId: row ? s(row, "oauth_client_id") : "",
+    oauthClientSecret: row ? s(row, "oauth_client_secret") : "",
+    oauthScopes: row && s(row, "oauth_scopes") ? s(row, "oauth_scopes") : "read write",
   };
 }
 
@@ -672,8 +679,6 @@ function oauthReady(settings: ZSettings) {
 }
 
 function clientCredentialsReady(settings: ZSettings) {
-  const id = settings.oauthClientId.trim().toLowerCase();
-  if (id === "mtsportal" || id === "mts-portal") return false;
   return oauthReady(settings);
 }
 
@@ -681,10 +686,10 @@ type OauthCache = { key: string; token: string; expiresAt: number };
 const oauthCache = globalThis as typeof globalThis & { __zendeskOauth?: OauthCache };
 
 async function zendeskAccessToken(settings: ZSettings) {
-  const key = `${settings.subdomain}:${settings.oauthClientId}:${settings.oauthScopes}`;
+  const key = `${settings.subdomain}:${settings.oauthClientId}:${settings.oauthClientSecret}:${settings.oauthScopes}`;
   const cached = oauthCache.__zendeskOauth;
   if (cached && cached.key === key && cached.expiresAt > Date.now() + 15_000) return cached.token;
-  const scopes = ["read", settings.oauthScopes || "read", "users:read tickets:read organizations:read"];
+  const scopes = [settings.oauthScopes || "read write", "read write", "read"];
   let lastDetail = "Zendesk rejected the OAuth client.";
   for (const scope of scopes) {
     for (const asForm of [false, true]) {
@@ -728,19 +733,13 @@ async function zendeskAccessToken(settings: ZSettings) {
 }
 
 async function zendeskAuthorization(settings: ZSettings) {
-  try {
-    return `Bearer ${await zendeskSupportToken()}`;
-  } catch (cause) {
-    if (clientCredentialsReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
-    if (settings.subdomain && settings.email && settings.apiToken) {
-      return `Basic ${basicAuth(settings.email, settings.apiToken)}`;
-    }
-    throw cause instanceof Error ? cause : new Error("Zendesk Support is not connected.");
-  }
+  if (settings.email && settings.apiToken) return `Basic ${basicAuth(settings.email, settings.apiToken)}`;
+  if (clientCredentialsReady(settings)) return `Bearer ${await zendeskAccessToken(settings)}`;
+  throw new Error("Zendesk Support is not connected.");
 }
 
 async function zendesk(settings: ZSettings, path: string, init?: RequestInit) {
-  const host = "mts-portal";
+  const host = settings.subdomain || "mts-portal";
   const url = path.startsWith("http") ? path : `https://${host}.zendesk.com/api/v2${path}`;
   const run = async () =>
     fetch(url, {
@@ -768,10 +767,13 @@ async function zendesk(settings: ZSettings, path: string, init?: RequestInit) {
     let detail = text.replaceAll(settings.apiToken, "").replaceAll(settings.oauthClientSecret, "").slice(0, 180);
     try {
       const parsed = JSON.parse(text) as { error?: unknown; description?: unknown };
-      if (typeof parsed.description === "string") detail = parsed.description.slice(0, 180);
+      if (typeof parsed.description === "string") detail = parsed.description.slice(0, 240);
       else if (typeof parsed.error === "string") detail = parsed.error.slice(0, 180);
     } catch {
       /* keep the raw snippet */
+    }
+    if (/missing the following required scopes/i.test(detail)) {
+      detail = "Zendesk refused the write. The connected client needs tickets:write and write, or use an API token that can edit tickets.";
     }
     throw new Error(`Zendesk returned ${response.status}. ${detail}`);
   }
@@ -796,6 +798,14 @@ async function rememberZendesk(sql: Sql, status: string, error: string, synced: 
 
 function supportConnected(settings: ZSettings) {
   return clientCredentialsReady(settings) || Boolean(settings.subdomain && settings.email && settings.apiToken);
+}
+
+async function mirrorCommerce(sql: Sql, kind: "product" | "order", id: number) {
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings) || !id) return;
+  const call = (path: string, init?: RequestInit) => zendesk(settings, path, init);
+  if (kind === "product") await pushProduct(sql, id, call).catch(() => undefined);
+  else await pushOrder(sql, id, call).catch(() => undefined);
 }
 
 async function upsertZendeskUser(sql: Sql, input: { name: string; email: string; kind: "staff" | "customer" | "shop" }) {
@@ -826,6 +836,8 @@ type ZendeskDirectoryUser = {
   email: string;
   phone: string;
   organizationId: string;
+  role: string;
+  timeZone: string;
 };
 
 function directoryUser(item: unknown): ZendeskDirectoryUser | null {
@@ -840,6 +852,8 @@ function directoryUser(item: unknown): ZendeskDirectoryUser | null {
     email,
     phone: typeof user.phone === "string" ? user.phone : "",
     organizationId: user.organization_id != null ? String(user.organization_id) : "",
+    role: role === "admin" ? "Admin" : role === "agent" ? "Staff" : "Customer",
+    timeZone: typeof user.time_zone === "string" ? user.time_zone : "",
   };
 }
 
@@ -884,13 +898,43 @@ async function lookupZendeskEndUser(sql: Sql, email: string) {
   return users.map(directoryUser).find((user) => user && user.email === email) ?? null;
 }
 
+export async function runFullZendeskSync(sql: Sql, actor?: Actor) {
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) throw new Error("Zendesk is not connected.");
+  const who: Actor = actor ?? {
+    userId: "",
+    name: "Zendesk sync",
+    email: "",
+    role: "owner",
+    organizationId: null,
+    organizationName: null,
+    active: true,
+  };
+  const imported = await importFromZendesk(sql, who, settings, "all");
+  const users = await importZendeskUsers(sql);
+  const call = (path: string, init?: RequestInit) => zendesk(settings, path, init);
+  const commerce = await syncCommerce(sql, call);
+  const customers = await sql<Row>`select id from shop_customers where zendesk_user_id <> ''`;
+  let billing = 0;
+  for (const customer of customers) {
+    await syncBillingAddress(sql, n(customer, "id"), call).catch(() => undefined);
+    billing += 1;
+  }
+  zendeskSyncAt = Date.now();
+  return { imported, users, billing, ...commerce };
+}
+
 export async function importZendeskUsers(sql: Sql) {
   const settings = await readZendesk(sql);
   if (!supportConnected(settings)) return 0;
   let imported = 0;
-  let path = "/users.json?role[]=end-user&per_page=100";
-  for (let page = 0; page < 5 && path; page += 1) {
-    const payload = await zendesk(settings, path);
+  let path = "/users.json?page[size]=100";
+  try {
+    await zendesk(settings, path);
+  } catch {
+    path = "/users.json?per_page=100";
+  }
+  await eachZendeskPage(settings, path, async (payload) => {
     const users = Array.isArray(payload.users) ? payload.users : [];
     for (const item of users) {
       const remote = directoryUser(item);
@@ -898,10 +942,61 @@ export async function importZendeskUsers(sql: Sql) {
       await acceptZendeskDirectoryUser(sql, remote);
       imported += 1;
     }
-    const next = typeof payload.next_page === "string" ? payload.next_page : "";
-    path = next && next !== path ? next : "";
-  }
+  });
   return imported;
+}
+
+export async function applyZendeskWebhook(sql: Sql, payload: unknown) {
+  const body = obj(payload);
+  const type = typeof body.type === "string" ? body.type : "";
+  const detail = obj(body.detail);
+  const ticket = obj(body.ticket);
+  const ticketId = ticket.id != null ? String(ticket.id) : type.includes("ticket") && detail.id != null ? String(detail.id) : "";
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return;
+  if (/^\d+$/.test(ticketId)) {
+    const rows = await sql<Row>`select * from tickets where zendesk_id = ${ticketId} limit 1`;
+    if (rows[0]) {
+      await refreshRemoteTicket(sql, mapTicket(rows[0])).catch(() => undefined);
+    } else {
+      const remotePayload = await zendesk(settings, `/tickets/${encodeURIComponent(ticketId)}.json?include=users`).catch(() => null);
+      const remote = remotePayload ? obj(remotePayload.ticket) : {};
+      if (remote.id != null && typeof remote.subject === "string") {
+        const users = indexUsers(remotePayload as Record<string, unknown>);
+        const requester = remote.requester_id != null ? users.get(String(remote.requester_id)) : undefined;
+        const saved = await sql<Row>`
+          insert into tickets (zendesk_id, subject, status, priority, requester_name, requester_email, updated_at)
+          values (
+            ${ticketId},
+            ${remote.subject},
+            ${zdStatus(String(remote.status || "open"))},
+            ${typeof remote.priority === "string" && remote.priority ? remote.priority : "normal"},
+            ${requester?.name || ""},
+            ${requester?.email || s(ticket, "requester_email")},
+            now()
+          )
+          on conflict (zendesk_id) do update set
+            status = excluded.status,
+            subject = excluded.subject,
+            updated_at = now()
+          returning id
+        `;
+        if (saved[0]) await pullComments(sql, settings, n(saved[0], "id"), ticketId, users).catch(() => undefined);
+      }
+    }
+  }
+  if (type.includes("user") && detail.id != null) {
+    const userPayload = await zendesk(settings, `/users/${encodeURIComponent(String(detail.id))}.json`).catch(() => null);
+    const remote = userPayload ? directoryUser(obj(userPayload.user)) : null;
+    if (remote) {
+      const customerId = await acceptZendeskDirectoryUser(sql, remote);
+      await syncBillingAddress(sql, customerId, (path, init) => zendesk(settings, path, init)).catch(() => undefined);
+    }
+  }
+  const objectKey = typeof body.object === "string" ? body.object : "";
+  if (objectKey.startsWith("mts_")) {
+    await syncCommerce(sql, (path, init) => zendesk(settings, path, init)).catch(() => undefined);
+  }
 }
 
 export async function acceptZendeskWebhookUser(sql: Sql, payload: unknown) {
@@ -1000,28 +1095,11 @@ export async function filePortalTicket(
   `;
   if (recent[0]) return { ticketId: n(recent[0], "id"), zendeskId: s(recent[0], "zendesk_id") };
   let zendeskId = "";
-  if (conversationsConfig().ready && input.email) {
-    const remoteUserId = await upsertConversationUser({
-      externalId: `portal:${input.email.toLowerCase()}`,
-      name: input.name || input.email,
-      email: input.email.toLowerCase(),
-      company: "",
-    });
-    const conversationId = await ensureConversationRecord({
-      userId: remoteUserId,
-      title: input.subject,
-      description: input.category || "Support",
-      body: input.body,
-      company: "",
-      kind: "ticket",
-    });
-    zendeskId = `sc:${conversationId}`;
-  }
   const inserted = await sql<Row>`
     insert into tickets (subject, status, priority, category, organization_id, requester_name, requester_email, tags, view_label, zendesk_id)
     values (
       ${input.subject}, 'new', 'normal', ${input.category}, ${input.organizationId},
-      ${input.name}, ${input.email}, 'portal,customer', '', ${zendeskId}
+      ${input.name}, ${input.email}, 'portal,customer', '', ''
     )
     returning id
   `;
@@ -1030,7 +1108,6 @@ export async function filePortalTicket(
     insert into ticket_comments (ticket_id, author_name, body, public_note)
     values (${ticketId}, ${input.name || "Customer"}, ${input.body}, true)
   `;
-  if (zendeskId) return { ticketId, zendeskId };
   const settings = await readZendesk(sql);
   if (!supportConnected(settings)) {
     await enqueueJob(sql, "zendesk_ticket", `ticket-${ticketId}`, { ticketId });
@@ -1239,6 +1316,28 @@ function indexUsers(payload: Record<string, unknown>) {
   return map;
 }
 
+function nextZendeskPage(payload: Record<string, unknown>, current: string) {
+  const meta = obj(payload.meta);
+  const links = obj(payload.links);
+  if (typeof meta.has_more === "boolean") {
+    return meta.has_more && typeof links.next === "string" && links.next !== current ? links.next : "";
+  }
+  const offsetNext = typeof payload.next_page === "string" ? payload.next_page : "";
+  return offsetNext && offsetNext !== current ? offsetNext : "";
+}
+
+async function eachZendeskPage(settings: ZSettings, start: string, visit: (payload: Record<string, unknown>) => Promise<void> | void) {
+  let next = start;
+  const seen = new Set<string>();
+  for (let page = 0; page < 100 && next; page += 1) {
+    if (seen.has(next)) break;
+    seen.add(next);
+    const payload = await zendesk(settings, next);
+    await visit(payload);
+    next = nextZendeskPage(payload, next);
+  }
+}
+
 async function linkOrganizations(sql: Sql, organizations: unknown[]) {
   for (const item of organizations) {
     const org = obj(item);
@@ -1302,12 +1401,14 @@ async function saveRemoteComment(
       insert into ticket_comments (ticket_id, author_name, body, public_note, created_at, zendesk_comment_id)
       values (${ticketId}, ${author || "Requester"}, ${body}, ${isPublic}, ${createdAt}, ${commentId})
     `;
+    await noticeDeskReply(sql, ticketId, author, "", body, isPublic).catch(() => undefined);
     return;
   }
   await sql`
     insert into ticket_comments (ticket_id, author_name, body, public_note, zendesk_comment_id)
     values (${ticketId}, ${author || "Requester"}, ${body}, ${isPublic}, ${commentId})
   `;
+  await noticeDeskReply(sql, ticketId, author, "", body, isPublic).catch(() => undefined);
 }
 
 async function pullComments(
@@ -1317,24 +1418,26 @@ async function pullComments(
   zendeskId: string,
   knownUsers?: Map<string, { name: string; email: string }>,
 ) {
-  const payload = await zendesk(settings, `/tickets/${encodeURIComponent(zendeskId)}/comments.json?include=users&sort_order=asc`);
-  const users = indexUsers(payload);
+  const users = indexUsers({});
   if (knownUsers) for (const [id, user] of knownUsers) users.set(id, user);
-  const comments = Array.isArray(payload.comments) ? payload.comments : [];
-  for (const item of comments) {
-    const comment = obj(item);
-    if (comment.id == null || typeof comment.body !== "string" || !comment.body.trim()) continue;
-    const author = comment.author_id != null ? users.get(String(comment.author_id)) : undefined;
-    await saveRemoteComment(
-      sql,
-      ticketId,
-      String(comment.id),
-      author?.name || "Requester",
-      comment.body.slice(0, 8000),
-      comment.public !== false,
-      typeof comment.created_at === "string" ? comment.created_at : "",
-    );
-  }
+  await eachZendeskPage(settings, `/tickets/${encodeURIComponent(zendeskId)}/comments.json?page[size]=100&include=users`, async (payload) => {
+    for (const [id, user] of indexUsers(payload)) users.set(id, user);
+    const comments = Array.isArray(payload.comments) ? payload.comments : [];
+    for (const item of comments) {
+      const comment = obj(item);
+      if (comment.id == null || typeof comment.body !== "string" || !comment.body.trim()) continue;
+      const author = comment.author_id != null ? users.get(String(comment.author_id)) : undefined;
+      await saveRemoteComment(
+        sql,
+        ticketId,
+        String(comment.id),
+        author?.name || "Requester",
+        comment.body.slice(0, 8000),
+        comment.public !== false,
+        typeof comment.created_at === "string" ? comment.created_at : "",
+      );
+    }
+  });
 }
 
 async function refreshRemoteTicket(sql: Sql, ticket: Ticket) {
@@ -1373,30 +1476,31 @@ async function refreshRemoteTicket(sql: Sql, ticket: Ticket) {
 let zendeskSync: Promise<number> | null = null;
 let zendeskSyncAt = 0;
 
-async function importFromZendesk(sql: Sql, actor: Actor, settings: ZSettings) {
-  let payload: Record<string, unknown>;
-  try {
-    payload = await zendesk(
-      settings,
-      "/tickets.json?include=users,organizations&per_page=100&sort_by=updated_at&sort_order=desc",
-    );
-  } catch {
-    payload = await zendesk(settings, "/tickets.json?per_page=100&sort_by=updated_at&sort_order=desc");
-  }
+async function importFromZendesk(sql: Sql, actor: Actor, settings: ZSettings, comments: "missing" | "all" = "missing") {
   const tickets: unknown[] = [];
-  const users = indexUsers(payload);
-  const organizations = Array.isArray(payload.organizations) ? [...payload.organizations] : [];
-  if (Array.isArray(payload.tickets)) tickets.push(...payload.tickets);
-  let next = typeof payload.next_page === "string" ? payload.next_page : "";
-  for (let page = 1; next && page < 5; page += 1) {
-    const more = await zendesk(settings, next);
-    if (Array.isArray(more.tickets)) tickets.push(...more.tickets);
-    for (const [id, user] of indexUsers(more)) users.set(id, user);
-    if (Array.isArray(more.organizations)) organizations.push(...more.organizations);
-    const upcoming = typeof more.next_page === "string" ? more.next_page : "";
-    next = upcoming && upcoming !== next ? upcoming : "";
+  const users = new Map<string, { name: string; email: string }>();
+  const organizations: unknown[] = [];
+  const collect = async (payload: Record<string, unknown>) => {
+    if (Array.isArray(payload.tickets)) tickets.push(...payload.tickets);
+    for (const [id, user] of indexUsers(payload)) users.set(id, user);
+    if (Array.isArray(payload.organizations)) organizations.push(...payload.organizations);
+  };
+  try {
+    await eachZendeskPage(settings, "/tickets.json?page[size]=100&include=users,organizations", collect);
+  } catch {
+    tickets.length = 0;
+    users.clear();
+    organizations.length = 0;
+    await eachZendeskPage(settings, "/tickets.json?per_page=100", collect);
   }
   await linkOrganizations(sql, organizations);
+  try {
+    await eachZendeskPage(settings, "/organizations.json?page[size]=100", async (payload) => {
+      if (Array.isArray(payload.organizations)) await linkOrganizations(sql, payload.organizations);
+    });
+  } catch {
+    /* ticket sideload already linked the companies it included */
+  }
   await linkRequesters(sql, users);
   const orgRows = await sql<Row>`select id, zendesk_org_id from organizations where zendesk_org_id <> ''`;
   const orgMap = new Map(orgRows.map((row) => [s(row, "zendesk_org_id"), n(row, "id")]));
@@ -1436,11 +1540,16 @@ async function importFromZendesk(sql: Sql, actor: Actor, settings: ZSettings) {
       returning id
     `;
     const ticketId = n(saved[0], "id");
-    const existing = await sql<Row>`select count(*)::int as n from ticket_comments where ticket_id = ${ticketId}`;
-    if ((existing[0] ? n(existing[0], "n") : 0) === 0) fresh.push({ id: ticketId, zendeskId });
+    if (comments === "all") {
+      fresh.push({ id: ticketId, zendeskId });
+    } else {
+      const existing = await sql<Row>`select count(*)::int as n from ticket_comments where ticket_id = ${ticketId}`;
+      if ((existing[0] ? n(existing[0], "n") : 0) === 0) fresh.push({ id: ticketId, zendeskId });
+    }
     imported += 1;
   }
-  for (const ticket of fresh.slice(0, 25)) {
+  const commentTargets = comments === "all" ? fresh : fresh.slice(0, 25);
+  for (const ticket of commentTargets) {
     try {
       await pullComments(sql, settings, ticket.id, ticket.zendeskId, users);
     } catch {
@@ -1454,7 +1563,7 @@ async function importFromZendesk(sql: Sql, actor: Actor, settings: ZSettings) {
 
 async function ensureZendeskSync(sql: Sql, actor: Actor) {
   const settings = await readZendesk(sql);
-  if (!settings.subdomain || !settings.email || !settings.apiToken) return;
+  if (!supportConnected(settings)) return;
   if (Date.now() - zendeskSyncAt < 120_000) return;
   zendeskSyncAt = Date.now();
   if (!zendeskSync) {
@@ -1483,7 +1592,7 @@ async function pushTicketComment(
   status: string,
 ) {
   const settings = await readZendesk(sql);
-  if (!supportConnected(settings) || !ticket.zendeskId) return "";
+  if (!supportConnected(settings) || !/^\d+$/.test(ticket.zendeskId)) return "";
   try {
     await zendesk(settings, `/tickets/${encodeURIComponent(ticket.zendeskId)}.json`, {
       method: "PUT",
@@ -1786,9 +1895,10 @@ export const replyTicket = createServerFn({ method: "POST" })
     assertWrite(actor);
     const detail = await fetchTicket(sql, actor, data.ticketId);
     const nextStatus = detail.ticket.status === "new" ? "open" : detail.ticket.status;
+    const author = data.publicNote ? await supportReplyName(sql) : actor.name;
     await sql`
       insert into ticket_comments (ticket_id, author_name, body, public_note)
-      values (${data.ticketId}, ${actor.name}, ${data.body}, ${data.publicNote})
+      values (${data.ticketId}, ${author}, ${data.body}, ${data.publicNote})
     `;
     await sql`
       update tickets set status = ${nextStatus}, updated_at = now() where id = ${data.ticketId}
@@ -2285,6 +2395,7 @@ export const saveProduct = createServerFn({ method: "POST" })
       `;
       await replaceImages(sql, data.id, data.images);
       await audit(sql, actor, "Updated product", data.sku, data.available ? "Available" : "Hidden");
+      await mirrorCommerce(sql, "product", data.id);
       return { id: data.id };
     }
     const inserted = await sql<Row>`
@@ -2298,6 +2409,7 @@ export const saveProduct = createServerFn({ method: "POST" })
     const id = n(inserted[0], "id");
     await replaceImages(sql, id, data.images);
     await audit(sql, actor, "Added product", data.sku, data.name);
+    await mirrorCommerce(sql, "product", id);
     return { id };
   });
 
@@ -2520,7 +2632,9 @@ async function mailOrder(sql: Sql, orderId: number, template: string) {
 async function pushTicket(sql: Sql, ticketId: number) {
   const rows = await sql<Row>`select * from tickets where id = ${ticketId}`;
   const ticket = rows[0];
-  if (!ticket || s(ticket, "zendesk_id")) return;
+  const current = ticket ? s(ticket, "zendesk_id") : "";
+  if (!ticket || /^\d+$/.test(current)) return;
+  if (current) await sql`update tickets set zendesk_id = '' where id = ${ticketId}`;
   const settings = await readZendesk(sql);
   if (!supportConnected(settings)) throw new Error("Zendesk Support is not connected.");
   const comments = await sql<Row>`select body from ticket_comments where ticket_id = ${ticketId} order by id limit 1`;
@@ -2889,6 +3003,7 @@ export const updateOrder = createServerFn({ method: "POST" })
       }
     }
     await audit(sql, actor, "Updated order", order.number, data.status);
+    await mirrorCommerce(sql, "order", data.id);
     return { ok: true };
   });
 
@@ -2996,6 +3111,233 @@ export const linkOrderTicket = createServerFn({ method: "POST" })
     `;
     await audit(sql, actor, "Linked order ticket", order.number, zendeskId || `Portal ticket ${ticketId}`);
     return { ticketId, warning };
+  });
+
+async function ensureDeskCatalog(sql: Sql) {
+  await sql`
+    create table if not exists zendesk_fields (
+      zendesk_id text primary key,
+      key text not null default '',
+      title text not null,
+      description text not null default '',
+      field_type text not null default 'text',
+      required boolean not null default false,
+      active boolean not null default true,
+      position integer not null default 0,
+      system_field boolean not null default false,
+      portal_visible boolean not null default false,
+      options_json text not null default '[]'
+    )
+  `;
+  await sql`alter table zendesk_fields add column if not exists portal_visible boolean not null default false`;
+  await sql`
+    create table if not exists zendesk_forms (
+      zendesk_id text primary key,
+      name text not null,
+      active boolean not null default true,
+      end_user_visible boolean not null default true,
+      is_default boolean not null default false,
+      position integer not null default 0,
+      field_ids text not null default ''
+    )
+  `;
+  await sql`alter table zendesk_forms add column if not exists conditions_json text not null default ''`;
+  await sql`alter table integration_settings add column if not exists fields_synced_at timestamptz`;
+}
+
+function fieldOptions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const option = obj(item);
+      const name = typeof option.name === "string" ? option.name : typeof option.raw_name === "string" ? option.raw_name : "";
+      const stored = option.value != null ? String(option.value) : "";
+      return { name: name.slice(0, 160), value: (stored || name).slice(0, 160) };
+    })
+    .filter((option) => option.name && option.value);
+}
+
+function formConditions(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const condition = obj(item);
+    const children = Array.isArray(condition.child_fields)
+      ? condition.child_fields
+          .map((child) => {
+            const row = obj(child);
+            const id = row.id != null ? String(row.id) : "";
+            return id ? { id, required: row.is_required === true } : null;
+          })
+          .filter((child): child is { id: string; required: boolean } => Boolean(child))
+      : [];
+    const parentId = condition.parent_field_id != null ? String(condition.parent_field_id) : "";
+    return parentId && children.length ? [{ parentId, value: condition.value != null ? String(condition.value) : "", children }] : [];
+  });
+}
+
+function storedConditions(text: string) {
+  try {
+    const parsed = JSON.parse(text || "[]") as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((item) => {
+      const condition = obj(item);
+      const children = Array.isArray(condition.children)
+        ? condition.children
+            .map((child) => {
+              const row = obj(child);
+              const id = row.id != null ? String(row.id) : "";
+              return id ? { id, required: row.required === true } : null;
+            })
+            .filter((child): child is { id: string; required: boolean } => Boolean(child))
+        : [];
+      const parentId = condition.parentId != null ? String(condition.parentId) : "";
+      return parentId && children.length ? [{ parentId, value: condition.value != null ? String(condition.value) : "", children }] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function shownByConditions(
+  fields: { id: string; key: string }[],
+  conditions: { parentId: string; value: string; children: { id: string; required: boolean }[] }[],
+  values: Record<string, string>,
+) {
+  const childIds = new Set(conditions.flatMap((condition) => condition.children.map((child) => child.id)));
+  const shown = new Set(fields.filter((field) => !childIds.has(field.id)).map((field) => field.id));
+  const required = new Set<string>();
+  for (const condition of conditions) {
+    const parent = fields.find((field) => field.id === condition.parentId);
+    const current = values[condition.parentId] || (parent?.key === "priority" ? values.priority || "" : "") || (parent?.key === "tickettype" ? values.tickettype || "" : "");
+    if (current !== condition.value) continue;
+    for (const child of condition.children) {
+      shown.add(child.id);
+      if (child.required) required.add(child.id);
+    }
+  }
+  return { shown, required };
+}
+
+async function syncZendeskCatalog(sql: Sql, force = false) {
+  await ensureDeskCatalog(sql);
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return "Zendesk is not connected.";
+  if (!force) {
+    const pending = await sql<Row>`select count(*) as n from zendesk_forms where conditions_json = ''`;
+    const stamp = await sql<Row>`select fields_synced_at from integration_settings where id = 1`;
+    const at = stamp[0] ? s(stamp[0], "fields_synced_at") : "";
+    const waiting = Number(pending[0]?.n ?? pending[0]?.count ?? 0) > 0;
+    const lookups = await sql<Row>`select count(*) as n from zendesk_fields where key in ('lookup', 'multi_lookup') and portal_visible = true`;
+    const leaked = Number(lookups[0]?.n ?? lookups[0]?.count ?? 0) > 0;
+    if (!waiting && !leaked && at && Date.now() - new Date(at).getTime() < 10 * 60 * 1000) return "";
+  }
+  const fields: Record<string, unknown>[] = [];
+  const forms: Record<string, unknown>[] = [];
+  await eachZendeskPage(settings, "/ticket_fields.json?page[size]=100", (payload) => {
+    if (Array.isArray(payload.ticket_fields)) fields.push(...payload.ticket_fields.map((item) => obj(item)));
+  });
+  await eachZendeskPage(settings, "/ticket_forms.json?page[size]=100", (payload) => {
+    if (Array.isArray(payload.ticket_forms)) forms.push(...payload.ticket_forms.map((item) => obj(item)));
+  });
+  await sql`delete from zendesk_fields`;
+  await sql`delete from zendesk_forms`;
+  for (const field of fields) {
+    if (field.id == null || field.active === false) continue;
+    const type = typeof field.type === "string" ? field.type : "text";
+    const title = (typeof field.title_in_portal === "string" && field.title_in_portal) || (typeof field.title === "string" ? field.title : type);
+    const description = typeof field.description === "string" ? field.description : "";
+    const customOptions = Array.isArray(field.custom_field_options) ? field.custom_field_options : [];
+    const systemOptions = Array.isArray(field.system_field_options) ? field.system_field_options : [];
+    const options = fieldOptions(customOptions.length ? customOptions : systemOptions);
+    const portalVisible = customerCanFill(type, field.visible_in_portal !== false, field.editable_in_portal !== false);
+    const required = portalVisible && (field.required_in_portal === true || type === "subject" || type === "description");
+    await sql`
+      insert into zendesk_fields (zendesk_id, key, title, description, field_type, required, active, position, system_field, portal_visible, options_json)
+      values (
+        ${String(field.id)}, ${type}, ${title.slice(0, 160)}, ${description.slice(0, 400)}, ${type},
+        ${required}, true, ${Number(field.position) || 0}, ${field.removable === false}, ${portalVisible}, ${JSON.stringify(options)}
+      )
+    `;
+  }
+  for (const form of forms) {
+    if (form.id == null || form.active === false || form.end_user_visible === false) continue;
+    const name = (typeof form.display_name === "string" && form.display_name) || (typeof form.name === "string" ? form.name : "Form");
+    const ids = Array.isArray(form.ticket_field_ids) ? form.ticket_field_ids.map((id) => String(id)) : [];
+    const conditions = formConditions(form.end_user_conditions);
+    await sql`
+      insert into zendesk_forms (zendesk_id, name, active, end_user_visible, is_default, position, field_ids, conditions_json)
+      values (
+        ${String(form.id)}, ${name.slice(0, 160)}, true, true, ${form.default === true},
+        ${Number(form.position) || 0}, ${ids.join(",")}, ${JSON.stringify(conditions)}
+      )
+    `;
+  }
+  await sql`update integration_settings set fields_synced_at = now() where id = 1`;
+  return "";
+}
+
+function mapDeskField(row: Row) {
+  let options: { name: string; value: string }[] = [];
+  try {
+    const parsed = JSON.parse(s(row, "options_json") || "[]") as unknown;
+    options = fieldOptions(parsed);
+  } catch {
+    options = [];
+  }
+  return {
+    id: s(row, "zendesk_id"),
+    key: s(row, "key"),
+    title: s(row, "title"),
+    description: s(row, "description"),
+    type: s(row, "field_type") || "text",
+    required: b(row, "required"),
+    visible: b(row, "portal_visible"),
+    options,
+  };
+}
+
+async function readDeskCatalog(sql: Sql) {
+  await ensureDeskCatalog(sql);
+  const fields = (await sql<Row>`select * from zendesk_fields order by position, title`).map(mapDeskField);
+  const forms = (await sql<Row>`select * from zendesk_forms order by is_default desc, position, name`).map((row) => ({
+    id: s(row, "zendesk_id"),
+    name: s(row, "name"),
+    fieldIds: tagsOf(s(row, "field_ids")),
+    conditions: storedConditions(s(row, "conditions_json")),
+  }));
+  return { fields, forms };
+}
+
+export const listPortalTicketSchema = createServerFn({ method: "GET" })
+  .validator((token: string) => str(token, 80))
+  .handler(async ({ data }) => {
+    const sql = await getSql();
+    await requirePortal(sql, data);
+    const warning = await syncZendeskCatalog(sql).catch((error) => (error instanceof Error ? error.message : "Could not read Zendesk fields."));
+    const catalog = await readDeskCatalog(sql);
+    return { forms: catalog.forms, fields: catalog.fields.filter((field) => field.visible), warning: warning || "" };
+  });
+
+export const listDeskFields = createServerFn({ method: "GET" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    await loadActor(sql, context.userId);
+    const warning = await syncZendeskCatalog(sql).catch((error) => (error instanceof Error ? error.message : "Could not read Zendesk fields."));
+    const catalog = await readDeskCatalog(sql);
+    return { ...catalog, warning: warning || "" };
+  });
+
+export const syncDeskFields = createServerFn({ method: "POST" })
+  .middleware([authMiddleware])
+  .handler(async ({ context }) => {
+    const sql = await getSql();
+    const actor = await loadActor(sql, context.userId);
+    assertWrite(actor);
+    const warning = await syncZendeskCatalog(sql, true);
+    const catalog = await readDeskCatalog(sql);
+    await audit(sql, actor, "Synced Zendesk fields", String(catalog.fields.length), `${catalog.forms.length} forms`);
+    return { ...catalog, warning };
   });
 
 export const listForms = createServerFn({ method: "GET" })
@@ -3358,7 +3700,7 @@ export const syncZendesk = createServerFn({ method: "POST" })
         const result = await testConversations();
         await rememberZendesk(sql, "connected", "", true);
         await audit(sql, actor, "Published to Zendesk", "conversations", `${published.users} people, ${published.tickets} tickets`);
-        return { imported: published.tickets, users: published.users, name: result.name };
+        return { imported: published.tickets, users: published.users, name: result.name, products: 0, orders: 0, payments: 0 };
       } catch (error) {
         const message = error instanceof Error ? error.message : "Connection failed.";
         await rememberZendesk(sql, "error", message, false);
@@ -3367,10 +3709,15 @@ export const syncZendesk = createServerFn({ method: "POST" })
     }
     try {
       const published = await publishLocalToZendesk(sql);
-      const imported = await importFromZendesk(sql, actor, settings);
-      const users = await importZendeskUsers(sql);
-      zendeskSyncAt = Date.now();
-      return { imported: imported + published.tickets, users: users + published.users };
+      const full = await runFullZendeskSync(sql, actor);
+      await audit(sql, actor, "Synced Zendesk commerce", settings.subdomain, `${full.products} products, ${full.orders} orders, ${full.payments} payments, ${full.billing} billing addresses`);
+      return {
+        imported: full.imported + published.tickets,
+        users: full.users + published.users,
+        products: full.products,
+        orders: full.orders,
+        payments: full.payments,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Sync failed.";
       await rememberZendesk(sql, "error", message, false);
@@ -3536,6 +3883,8 @@ export const getSettings = createServerFn({ method: "GET" })
         brandName: s(row, "brand_name") || "Manage Tech Service",
         supportEmail: s(row, "support_email"),
         tagline: s(row, "tagline"),
+        replyName: s(row, "reply_name") || "MTS Support",
+        emailSignature: s(row, "email_signature") || DEFAULT_EMAIL_SIGNATURE,
         notifyNewTicket: row.notify_new_ticket == null ? true : b(row, "notify_new_ticket"),
         notifyNewOrder: row.notify_new_order == null ? true : b(row, "notify_new_order"),
         customerCatalogVisible: row.customer_catalog_visible == null ? true : b(row, "customer_catalog_visible"),
@@ -3564,6 +3913,8 @@ export const saveSettings = createServerFn({ method: "POST" })
       brandName,
       supportEmail: str(raw.supportEmail, 180),
       tagline: str(raw.tagline, 240),
+      replyName: str(raw.replyName, 80) || "MTS Support",
+      emailSignature: str(raw.emailSignature, 1200) || DEFAULT_EMAIL_SIGNATURE,
       notifyNewTicket: flag(raw.notifyNewTicket, true),
       notifyNewOrder: flag(raw.notifyNewOrder, true),
       customerCatalogVisible: flag(raw.customerCatalogVisible, true),
@@ -3573,24 +3924,59 @@ export const saveSettings = createServerFn({ method: "POST" })
     const sql = await getSql();
     const actor = await loadActor(sql, context.userId);
     assertAdmin(actor);
+    await sql`alter table portal_settings add column if not exists email_signature text not null default ''`;
     await sql`
       insert into portal_settings (
-        id, brand_name, support_email, tagline, notify_new_ticket, notify_new_order, customer_catalog_visible
+        id, brand_name, support_email, tagline, reply_name, email_signature, notify_new_ticket, notify_new_order, customer_catalog_visible
       ) values (
-        1, ${data.brandName}, ${data.supportEmail}, ${data.tagline},
+        1, ${data.brandName}, ${data.supportEmail}, ${data.tagline}, ${data.replyName}, ${data.emailSignature},
         ${data.notifyNewTicket}, ${data.notifyNewOrder}, ${data.customerCatalogVisible}
       )
       on conflict (id) do update set
         brand_name = excluded.brand_name,
         support_email = excluded.support_email,
         tagline = excluded.tagline,
+        reply_name = excluded.reply_name,
+        email_signature = excluded.email_signature,
         notify_new_ticket = excluded.notify_new_ticket,
         notify_new_order = excluded.notify_new_order,
         customer_catalog_visible = excluded.customer_catalog_visible
     `;
+    const zendeskWarning = await pushEmailSignature(sql, data.emailSignature).catch((error) =>
+      error instanceof Error ? error.message : "Zendesk did not update the signature.",
+    );
     await audit(sql, actor, "Updated settings", data.brandName, data.supportEmail);
-    return { ok: true };
+    return { ok: true, zendeskWarning: zendeskWarning || "" };
   });
+
+async function pushEmailSignature(sql: Sql, template: string) {
+  const settings = await readZendesk(sql);
+  if (!supportConnected(settings)) return "";
+  const brands = await zendesk(settings, "/brands.json");
+  const list = Array.isArray(brands.brands) ? brands.brands : [];
+  const brand = list.find((item) => obj(item).default === true) || list[0];
+  const brandId = brand ? obj(brand).id : null;
+  if (brandId != null) {
+    await zendesk(settings, `/brands/${encodeURIComponent(String(brandId))}.json`, {
+      method: "PUT",
+      body: JSON.stringify({ brand: { signature_template: signatureHtml(template) } }),
+    });
+  }
+  await zendesk(settings, "/account/settings.json", {
+    method: "PUT",
+    body: JSON.stringify({
+      settings: {
+        email: {
+          modern_email_template: false,
+          gmail_actions: false,
+          html_mail_template: htmlMailTemplate(template),
+          text_mail_template: textMailTemplate(template),
+        },
+      },
+    }),
+  });
+  return "";
+}
 
 export const saveResend = createServerFn({ method: "POST" })
   .middleware([authMiddleware])
@@ -3661,6 +4047,8 @@ export const sendTestEmail = createServerFn({ method: "POST" })
     assertAdmin(actor);
     const mail = await resolveMail(sql);
     if (!mail.key) throw new Error("Add a Resend API key first.");
+    const signature = await sql<Row>`select email_signature, reply_name from portal_settings where id = 1`;
+    const signoff = renderSignature(signature[0] ? s(signature[0], "email_signature") : "", signature[0] ? s(signature[0], "reply_name") : "MTS Support");
     const response = await fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: { Authorization: `Bearer ${mail.key}`, "Content-Type": "application/json" },
@@ -3668,7 +4056,7 @@ export const sendTestEmail = createServerFn({ method: "POST" })
         from: mail.from,
         to: [data],
         subject: "Manage Tech Service test email",
-        text: `This is a test from the admin desk. It was sent from ${mail.from}.`,
+        text: `This is a test from the admin desk. It was sent from ${mail.from}.\n\n${signoff}`,
       }),
     });
     const text = await response.text();
@@ -4124,10 +4512,41 @@ async function shopByToken(sql: Sql, token: string) {
 
 async function notifyCustomer(sql: Sql, customerId: number | null, title: string, body: string, href: string) {
   if (!customerId) return;
+  const existing = await sql<Row>`
+    select id from customer_notices
+    where shop_customer_id = ${customerId} and href = ${href} and body = ${body} and read_at is null
+    limit 1
+  `;
+  if (existing[0]) return;
   await sql`
     insert into customer_notices (shop_customer_id, title, body, href)
     values (${customerId}, ${title}, ${body}, ${href})
   `;
+  publishLive(customerId, { type: "notices" });
+}
+
+async function noticeDeskReply(sql: Sql, ticketId: number, authorName: string, authorEmail: string, body: string, isPublic: boolean) {
+  if (!isPublic || !body.trim()) return;
+  if (!authorEmail && /^(requester|customer)$/i.test(authorName.trim())) return;
+  const tickets = await sql<Row>`select subject, requester_email, requester_name from tickets where id = ${ticketId} limit 1`;
+  const ticket = tickets[0];
+  if (!ticket) return;
+  const requesterEmail = s(ticket, "requester_email").trim().toLowerCase();
+  const requesterName = s(ticket, "requester_name").trim().toLowerCase();
+  if (authorEmail && requesterEmail && authorEmail.trim().toLowerCase() === requesterEmail) return;
+  if (!authorEmail && requesterName && authorName.trim().toLowerCase() === requesterName) return;
+  if (!requesterEmail) return;
+  const customers = await sql<Row>`select id from shop_customers where lower(email) = ${requesterEmail} limit 1`;
+  if (!customers[0]) return;
+  const subject = s(ticket, "subject") || "your ticket";
+  const snippet = body.replace(/\s+/g, " ").trim().slice(0, 180);
+  await notifyCustomer(
+    sql,
+    n(customers[0], "id"),
+    `Reply on ${subject}`,
+    snippet || `${authorName || "MTS Support"} replied.`,
+    `/production/user-portal/tickets/${ticketId}`,
+  );
 }
 
 async function shopOrders(sql: Sql, customerId: number, email: string): Promise<ShopOrder[]> {
@@ -4248,6 +4667,7 @@ function mapPortalTicket(row: Row, comments: Row[] = []): PortalTicket {
     status: s(row, "status"),
     category: s(row, "category"),
     zendeskId: s(row, "zendesk_id"),
+    zendeskWarning: "",
     updatedAt: s(row, "updated_at"),
     comments: comments.map((item) => ({
       author: s(item, "author_name"),
@@ -4275,25 +4695,34 @@ export const getPortalSession = createServerFn({ method: "GET" })
     const sql = await getSql();
     const row = await shopByToken(sql, data);
     if (!row) return null;
-    const access = await accessFor(sql, row);
+    const remote = await lookupZendeskEndUser(sql, s(row, "email")).catch(() => null);
+    if (remote) await acceptZendeskDirectoryUser(sql, remote);
+    const settings = await readZendesk(sql);
+    if (supportConnected(settings)) {
+      await syncBillingAddress(sql, n(row, "id"), (path, init) => zendesk(settings, path, init)).catch(() => undefined);
+    }
+    const fresh = (await sql<Row>`select * from shop_customers where id = ${n(row, "id")} limit 1`)[0] ?? row;
+    const access = await accessFor(sql, fresh);
     const tickets = await sql<Row>`
       select id, subject, status, category, zendesk_id, updated_at
       from tickets
-      where lower(requester_email) = lower(${s(row, "email")})
+      where lower(requester_email) = lower(${s(fresh, "email")})
       order by updated_at desc
       limit 20
     `;
-    const orgId = nid(row, "organization_id");
+    const orgId = nid(fresh, "organization_id");
     const orgs = orgId ? await sql<Row>`select name from organizations where id = ${orgId}` : [];
     return {
-      customer: mapShopCustomer(row),
+      customer: mapShopCustomer(fresh),
       access,
       tickets: tickets.map((item) => mapPortalTicket(item)),
-      business: s(row, "business_name"),
+      business: s(fresh, "business_name"),
       organization: orgs[0] ? s(orgs[0], "name") : "",
-      interests: s(row, "interests").split(",").map((item) => item.trim()).filter(Boolean),
-      verified: b(row, "email_verified"),
-      grants: { shop: b(row, "grant_shop"), services: b(row, "grant_services"), invoice: b(row, "grant_invoice") },
+      interests: s(fresh, "interests").split(",").map((item) => item.trim()).filter(Boolean),
+      verified: b(fresh, "email_verified"),
+      zendeskRole: remote?.role || access.roleLabel,
+      timeZone: remote?.timeZone || "",
+      grants: { shop: b(fresh, "grant_shop"), services: b(fresh, "grant_services"), invoice: b(fresh, "grant_invoice") },
     };
   });
 
@@ -4355,26 +4784,34 @@ export const getPortalTicket = createServerFn({ method: "GET" })
     `;
     const ticket = tickets[0];
     if (!ticket) throw new Error("That ticket is not on this account.");
+    const synced = /^\d+$/.test(s(ticket, "zendesk_id")) ? null : await syncCustomerTicket(sql, s(row, "email"), data.id);
+    const fresh = synced
+      ? await sql<Row>`select * from tickets where id = ${data.id} limit 1`
+      : tickets;
     const comments = await sql<Row>`
       select * from ticket_comments
       where ticket_id = ${data.id} and public_note = true
       order by created_at
     `;
-    return mapPortalTicket(ticket, comments);
+    return { ...mapPortalTicket(fresh[0] ?? ticket, comments), zendeskWarning: synced?.warning ?? "" };
   });
 
 export const submitPortalTicket = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
     const raw = obj(input);
     const token = str(raw.token, 80);
-    const subject = str(raw.subject, 180);
-    const body = str(raw.body, 4000);
+    const subject = str(raw.subject, 180) || str(obj(raw.fields).subject, 180);
+    const body = str(raw.body, 4000) || str(obj(raw.fields).description, 4000);
     const category = str(raw.category, 80) || "IT support";
-    const severity = str(raw.severity, 20) || "normal";
+    const severity = str(raw.severity, 20) || str(obj(raw.fields).priority, 20) || "normal";
     const device = str(raw.device, 120);
+    const formId = str(raw.formId, 40);
+    const fields = obj(raw.fields);
+    const clean: Record<string, string> = {};
+    for (const [key, value] of Object.entries(fields)) clean[str(key, 40)] = str(value, 4000);
     if (!token) throw new Error("Sign in again.");
     if (!subject || !body) throw new Error("Subject and details are required.");
-    return { token, subject, body, category, severity, device };
+    return { token, subject, body, category, severity, device, formId, fields: clean };
   })
   .handler(async ({ data }) => {
     const sql = await getSql();
@@ -4383,10 +4820,24 @@ export const submitPortalTicket = createServerFn({ method: "POST" })
     const name = s(row, "name");
     const email = s(row, "email");
     const orgId = nid(row, "organization_id");
-    const detail = [`Category: ${data.category}`, `Severity: ${data.severity}`, data.device ? `Device: ${data.device}` : "", data.body].filter(Boolean).join("\n");
+    const catalog = await readDeskCatalog(sql).catch(() => ({ fields: [] as ReturnType<typeof mapDeskField>[], forms: [] as { id: string; name: string; fieldIds: string[]; conditions: { parentId: string; value: string; children: { id: string; required: boolean }[] }[] }[] }));
+    const labels = new Map(catalog.fields.map((field) => [field.id, field.title]));
+    const form = catalog.forms.find((item) => item.id === data.formId) || catalog.forms[0];
+    const gate = form ? shownByConditions(catalog.fields.filter((field) => field.visible), form.conditions, data.fields) : null;
+    if (gate) {
+      for (const id of gate.required) {
+        if (!data.fields[id]) throw new Error(`${labels.get(id) || "A required field"} is required.`);
+      }
+    }
+    const extras = Object.entries(data.fields)
+      .filter(([key, value]) => value && key !== "subject" && key !== "description" && (!gate || gate.shown.has(key) || !/^\d+$/.test(key)))
+      .map(([key, value]) => `${labels.get(key) || key}: ${value}`);
+    const detail = [data.body, ...extras].filter(Boolean).join("\n");
+    const priority = ["low", "normal", "high", "urgent"].includes(data.severity) ? data.severity : "normal";
+    const ticketType = ["question", "incident", "problem", "task"].includes(data.fields.tickettype || "") ? data.fields.tickettype : "";
     const inserted = await sql<Row>`
       insert into tickets (subject, status, priority, category, organization_id, requester_name, requester_email, tags, view_label)
-      values (${data.subject}, 'new', ${data.severity === "high" ? "high" : "normal"}, ${data.category}, ${orgId}, ${name}, ${email}, 'portal,customer', '')
+      values (${data.subject}, 'new', ${priority}, ${data.category}, ${orgId}, ${name}, ${email}, 'portal,customer', '')
       returning id
     `;
     const ticketId = n(inserted[0], "id");
@@ -4402,17 +4853,23 @@ export const submitPortalTicket = createServerFn({ method: "POST" })
       warning = "The ticket is open in the portal. Zendesk will receive it when the desk is connected.";
     } else {
       try {
+        const customFields = Object.entries(data.fields)
+          .filter(([key, value]) => /^\d+$/.test(key) && value !== "" && (!gate || gate.shown.has(key)))
+          .map(([key, value]) => ({ id: Number(key), value: value === "true" ? true : value === "false" ? false : value }));
+        const ticket: Record<string, unknown> = {
+          subject: data.subject,
+          comment: { body: detail },
+          tags: ["portal", "customer"],
+          status: "new",
+          priority,
+          requester: { name: name || email, email },
+        };
+        if (ticketType) ticket.type = ticketType;
+        if (/^\d+$/.test(data.formId)) ticket.ticket_form_id = Number(data.formId);
+        if (customFields.length) ticket.custom_fields = customFields;
         const created = await zendesk(settings, "/tickets.json", {
           method: "POST",
-          body: JSON.stringify({
-            ticket: {
-              subject: data.subject,
-              comment: { body: detail },
-              tags: ["portal", "customer", data.category.toLowerCase().replace(/\s+/g, "_")],
-              status: "new",
-              requester: { name: name || email, email },
-            },
-          }),
+          body: JSON.stringify({ ticket }),
         });
         const remote = obj(created.ticket);
         zendeskId = remote.id != null ? String(remote.id) : "";
@@ -4431,9 +4888,14 @@ export const submitPortalTicket = createServerFn({ method: "POST" })
       String(ticketId),
       data.subject,
     ).catch(() => undefined);
-    await notifyCustomer(sql, n(row, "id"), "Ticket opened", data.subject, `/portal/tickets/${ticketId}`).catch(() => undefined);
+    await notifyCustomer(sql, n(row, "id"), "Ticket opened", data.subject, `/production/user-portal/tickets/${ticketId}`).catch(() => undefined);
     return { ticketId, zendeskId, warning };
   });
+
+async function supportReplyName(sql: Sql) {
+  const rows = await sql<Row>`select reply_name from portal_settings where id = 1`;
+  return (rows[0] ? s(rows[0], "reply_name") : "") || "MTS Support";
+}
 
 export async function syncCustomerTicket(sql: Sql, email: string, ticketId: number) {
   const tickets = await sql<Row>`
@@ -4441,30 +4903,83 @@ export async function syncCustomerTicket(sql: Sql, email: string, ticketId: numb
   `;
   const ticket = tickets[0];
   if (!ticket) return { synced: false, status: "", warning: "That ticket is not on this account." };
-  const zendeskId = s(ticket, "zendesk_id");
+  const storedId = s(ticket, "zendesk_id");
+  const zendeskId = /^\d+$/.test(storedId) ? storedId : "";
   const settings = await readZendesk(sql);
-  if (!zendeskId || !supportConnected(settings)) {
-    return { synced: false, status: s(ticket, "status"), warning: zendeskId ? "Zendesk is not connected." : "This ticket is not in Zendesk yet." };
+  if (!zendeskId) {
+    try {
+      await pushTicket(sql, ticketId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Zendesk did not accept the ticket.";
+      return { synced: false, status: s(ticket, "status"), warning: message };
+    }
+    const fresh = await sql<Row>`select zendesk_id, status from tickets where id = ${ticketId}`;
+    const createdId = fresh[0] ? s(fresh[0], "zendesk_id") : "";
+    if (!createdId) return { synced: false, status: s(ticket, "status"), warning: "Zendesk did not return a ticket number." };
+    return { synced: true, status: fresh[0] ? s(fresh[0], "status") : s(ticket, "status"), warning: "" };
   }
-  const remote = await zendesk(settings, `/tickets/${encodeURIComponent(zendeskId)}.json`);
+  if (!supportConnected(settings)) {
+    return { synced: false, status: s(ticket, "status"), warning: "Zendesk is not connected." };
+  }
+  const remote = await zendesk(settings, `/tickets/${encodeURIComponent(zendeskId)}.json?include=users`);
   const body = obj(remote.ticket);
   const status = zdStatus(String(body.status || s(ticket, "status")));
   await sql`update tickets set status = ${status}, updated_at = now() where id = ${ticketId}`;
-  const comments = await zendesk(settings, `/tickets/${encodeURIComponent(zendeskId)}/comments.json`);
-  const list = Array.isArray(comments.comments) ? comments.comments : [];
+  const requesterId = body.requester_id != null ? String(body.requester_id) : "";
+  const users = indexUsers(remote);
+  const requesterName = users.get(requesterId)?.name || s(ticket, "requester_name") || "Customer";
+  const replyName = await supportReplyName(sql);
+  const list: unknown[] = [];
+  await eachZendeskPage(settings, `/tickets/${encodeURIComponent(zendeskId)}/comments.json?page[size]=100&include=users`, async (payload) => {
+    for (const [id, user] of indexUsers(payload)) users.set(id, user);
+    if (Array.isArray(payload.comments)) list.push(...payload.comments);
+  });
   for (const item of list) {
     const comment = obj(item);
     const commentId = comment.id != null ? String(comment.id) : "";
     const text = typeof comment.body === "string" ? comment.body.slice(0, 4000) : "";
     if (!commentId || !text) continue;
     const isPublic = commentIsPublic(comment.public);
+    const authorId = comment.author_id != null ? String(comment.author_id) : "";
+    const fromCustomer = Boolean(requesterId) && authorId === requesterId;
+    const author = fromCustomer ? requesterName : replyName;
     const existing = await sql<Row>`select id from ticket_comments where zendesk_comment_id = ${commentId} limit 1`;
-    if (existing.length) continue;
+    if (existing.length) {
+      await sql`update ticket_comments set author_name = ${author} where id = ${n(existing[0], "id")} and author_name in ('Zendesk', 'Requester', '')`;
+      continue;
+    }
+    const same = await sql<Row>`
+      select id from ticket_comments
+      where ticket_id = ${ticketId} and zendesk_comment_id is null and body = ${text}
+      limit 1
+    `;
+    if (same[0]) {
+      await sql`update ticket_comments set zendesk_comment_id = ${commentId} where id = ${n(same[0], "id")}`;
+      if (!fromCustomer) {
+        await sql`update ticket_comments set author_name = ${replyName} where id = ${n(same[0], "id")} and author_name in ('Zendesk', 'Requester', '')`;
+      }
+      continue;
+    }
     await sql`
       insert into ticket_comments (ticket_id, author_name, body, public_note, zendesk_comment_id)
-      values (${ticketId}, 'Zendesk', ${text}, ${isPublic}, ${commentId})
+      values (${ticketId}, ${author}, ${text}, ${isPublic}, ${commentId})
     `;
+    const authorEmail = fromCustomer ? s(ticket, "requester_email") : (users.get(authorId)?.email || "");
+    await noticeDeskReply(sql, ticketId, author, authorEmail, text, isPublic).catch(() => undefined);
   }
+  await sql`update ticket_comments set author_name = ${replyName} where ticket_id = ${ticketId} and author_name = 'Zendesk'`;
+  await sql`
+    delete from ticket_comments c
+    where c.ticket_id = ${ticketId}
+      and c.author_name = ${replyName}
+      and exists (
+        select 1 from ticket_comments other
+        where other.ticket_id = c.ticket_id
+          and other.id <> c.id
+          and other.body = c.body
+          and other.author_name <> ${replyName}
+      )
+  `;
   return { synced: true, status, warning: "" };
 }
 
@@ -4729,8 +5244,11 @@ export const listCustomerNotices = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const sql = await getSql();
     const { row } = await requirePortal(sql, data);
+    const customerId = n(row, "id");
+    const email = s(row, "email");
+    await pullCustomerReplies(sql, email, customerId).catch(() => undefined);
     const rows = await sql<Row>`
-      select * from customer_notices where shop_customer_id = ${n(row, "id")} order by id desc limit 40
+      select * from customer_notices where shop_customer_id = ${customerId} order by id desc limit 40
     `;
     return rows.map((item) => ({
       id: n(item, "id"),
@@ -4741,6 +5259,24 @@ export const listCustomerNotices = createServerFn({ method: "GET" })
       createdAt: s(item, "created_at"),
     }));
   });
+
+const replyPullAt = new Map<number, number>();
+
+async function pullCustomerReplies(sql: Sql, email: string, customerId: number) {
+  if (!email || !customerId) return;
+  const last = replyPullAt.get(customerId) ?? 0;
+  if (Date.now() - last < 45_000) return;
+  replyPullAt.set(customerId, Date.now());
+  const tickets = await sql<Row>`
+    select id from tickets
+    where lower(requester_email) = lower(${email}) and zendesk_id ~ '^[0-9]+$'
+    order by updated_at desc
+    limit 6
+  `;
+  for (const ticket of tickets) {
+    await syncCustomerTicket(sql, email, n(ticket, "id")).catch(() => undefined);
+  }
+}
 
 export const markCustomerNotice = createServerFn({ method: "POST" })
   .validator((input: unknown) => {
@@ -4757,6 +5293,7 @@ export const markCustomerNotice = createServerFn({ method: "POST" })
       update customer_notices set read_at = now()
       where id = ${data.id} and shop_customer_id = ${n(row, "id")} and read_at is null
     `;
+    publishLive(n(row, "id"), { type: "notices" });
     return { ok: true };
   });
 
@@ -4837,7 +5374,7 @@ export const replyPortalTicket = createServerFn({ method: "POST" })
     `;
     const zendeskId = s(ticket, "zendesk_id");
     const settings = await readZendesk(sql);
-    if (zendeskId && supportConnected(settings)) {
+    if (/^\d+$/.test(zendeskId) && supportConnected(settings)) {
       await zendesk(settings, `/tickets/${encodeURIComponent(zendeskId)}.json`, {
         method: "PUT",
         body: JSON.stringify({ ticket: { comment: { body: data.body, public: true } } }),
@@ -5285,6 +5822,22 @@ export const saveShopProfile = createServerFn({ method: "POST" })
         country = ${data.country}
       where id = ${n(row, "id")}
     `;
+    const settings = await readZendesk(sql);
+    if (supportConnected(settings)) {
+      const call = (path: string, init?: RequestInit) => zendesk(settings, path, init);
+      await pushBillingAddress(sql, n(row, "id"), call).catch(() => undefined);
+      await zendesk(settings, "/users/create_or_update.json", {
+        method: "POST",
+        body: JSON.stringify({
+          user: {
+            email: s(row, "email"),
+            name: data.name,
+            phone: data.phone,
+            skip_verify_email: true,
+          },
+        }),
+      }).catch(() => undefined);
+    }
     return { ok: true };
   });
 
@@ -5483,6 +6036,7 @@ export const placeStorefrontOrder = createServerFn({ method: "POST" })
     `;
     await settleNewOrder(sql, id, "Online shop");
     await notifyCustomer(sql, customerId, payLater ? "Order invoiced" : "Order received", `MT-${1000 + id} is ${payLater ? "on invoice" : "waiting for payment"}.`, `/portal/orders/${id}`).catch(() => undefined);
+    await mirrorCommerce(sql, "order", id);
     return { id, number: `MT-${1000 + id}`, paymentUrl, token, totalCents: subtotal + shipping.cents };
   });
 

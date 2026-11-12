@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_app/roles")({
   component: RolesPage,
 });
 
-function RolesPage() {
+export function RolesPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["policies"], queryFn: () => listPolicies() });
   const [drafts, setDrafts] = useState<Policy[]>([]);

@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { saveShopProfile } from "@/lib/portal/api";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
@@ -14,22 +14,40 @@ export const Route = createFileRoute("/portal/account")({
 
 export function AccountPage() {
   const token = useShopToken();
+  const client = useQueryClient();
   const session = usePortalSession();
   const user = useCurrentUser();
   const customer = session.data?.customer;
-  const [name, setName] = useState(customer?.name || "");
-  const [phone, setPhone] = useState(customer?.phone || "");
-  const [address, setAddress] = useState(customer?.address || "");
-  const [city, setCity] = useState(customer?.city || "");
-  const [region, setRegion] = useState(customer?.region || "");
-  const [postal, setPostal] = useState(customer?.postal || "");
-  const [country, setCountry] = useState(customer?.country || "United States");
+  const [name, setName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [address, setAddress] = useState("");
+  const [city, setCity] = useState("");
+  const [region, setRegion] = useState("");
+  const [postal, setPostal] = useState("");
+  const [country, setCountry] = useState("United States");
+  const [seeded, setSeeded] = useState(false);
   const [notice, setNotice] = useState("");
+  useEffect(() => {
+    if (!customer || seeded) return;
+    setName(customer.name);
+    setPhone(customer.phone);
+    setAddress(customer.address);
+    setCity(customer.city);
+    setRegion(customer.region);
+    setPostal(customer.postal);
+    setCountry(customer.country || "United States");
+    setSeeded(true);
+  }, [customer, seeded]);
   const save = useMutation({
     mutationFn: () => saveShopProfile({ data: { token, name, phone, address, city, region, postal, country } }),
-    onSuccess: () => setNotice("Account saved."),
+    onSuccess: async () => {
+      setNotice("Account saved.");
+      await client.invalidateQueries({ queryKey: ["portal-session"] });
+    },
     onError: (error) => setNotice(error instanceof Error ? error.message : "Could not save."),
   });
+  if (!token || session.isPending || !seeded) return <p className="text-sm text-muted">Loading account…</p>;
+  if (session.isError || !customer) return <p className="text-sm text-bad">This account could not be loaded. Sign in again.</p>;
   return (
     <form className="grid w-full gap-4" onSubmit={(event) => { event.preventDefault(); save.mutate(); }}>
       <div className="grid gap-1">
@@ -38,10 +56,11 @@ export function AccountPage() {
       </div>
       <PortalPanel title="Profile">
         <div className="grid gap-3 sm:grid-cols-2">
-          <DataField label="Email" value={user?.primaryEmail || customer?.email} />
-          <DataField label="Company" value={session.data?.organization || session.data?.business} />
-          <DataField label="Role" value={session.data?.access.roleLabel} />
-          <DataField label="Billing terms" value={customer?.payLater ? "Order now, pay later" : "Pay at checkout"} />
+          <DataField label="Email" value={customer.email || user?.primaryEmail} />
+          <DataField label="Company" value={session.data?.organization || session.data?.business || "Not set"} />
+          <DataField label="Role" value={session.data?.zendeskRole || session.data?.access.roleLabel} />
+          <DataField label="Time zone" value={session.data?.timeZone || "Not set"} />
+          <DataField label="Billing terms" value={customer.payLater ? "Order now, pay later" : "Pay at checkout"} />
         </div>
       </PortalPanel>
       <PortalPanel title="Contact and billing">

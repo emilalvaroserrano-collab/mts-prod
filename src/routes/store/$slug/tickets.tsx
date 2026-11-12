@@ -66,7 +66,7 @@ function StoreTickets() {
       <div className="mx-auto grid w-full max-w-3xl gap-4 px-4 py-8">
         <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
         {!token ? (
-          <Link to="/upgrade" className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">Sign in to open a ticket</Link>
+          <Link to="/production/signin" className="flex h-12 items-center justify-center rounded-full bg-ink text-sm font-semibold text-white">Sign in to open a ticket</Link>
         ) : (
           <form
             className="grid gap-3 rounded-2xl border border-line bg-white p-4"

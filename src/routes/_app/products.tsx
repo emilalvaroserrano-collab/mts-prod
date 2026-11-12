@@ -165,7 +165,7 @@ function readProductPhoto(file: File): Promise<string> {
   });
 }
 
-function ProductsPage() {
+export function ProductsPage() {
   const client = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const query = useQuery({ queryKey: ["products"], queryFn: () => listProducts() });

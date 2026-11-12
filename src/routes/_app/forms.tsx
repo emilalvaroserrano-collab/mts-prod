@@ -2,8 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { toast } from "sonner";
-import { listForms, listOrgs, saveForm, testForm } from "@/lib/portal/api";
+import { listDeskFields, listForms, listOrgs, saveForm, syncDeskFields, testForm } from "@/lib/portal/api";
 import type { TicketForm } from "@/lib/portal/types";
+import { fieldAudience } from "@/lib/portal/zendesk-field-types";
 import { Badge, Button, ErrorNote, Field, Input, Loading, Modal, PageHeader, Panel, Select, Toggle, errorText } from "@/components/ui";
 
 export const Route = createFileRoute("/_app/forms")({
@@ -21,10 +22,11 @@ const blank = (): TicketForm => ({
   active: true,
 });
 
-function FormsPage() {
+export function FormsPage() {
   const client = useQueryClient();
   const navigate = useNavigate();
   const forms = useQuery({ queryKey: ["forms"], queryFn: () => listForms() });
+  const desk = useQuery({ queryKey: ["desk-fields"], queryFn: () => listDeskFields() });
   const orgs = useQuery({ queryKey: ["orgs"], queryFn: () => listOrgs() });
   const [draft, setDraft] = useState<TicketForm | null>(null);
   const [fieldsText, setFieldsText] = useState("subject");
@@ -32,6 +34,16 @@ function FormsPage() {
   const [organizationId, setOrganizationId] = useState<number | "">("");
   const [asRegular, setAsRegular] = useState(true);
   const [values, setValues] = useState<Record<string, string>>({});
+
+  const sync = useMutation({
+    mutationFn: () => syncDeskFields(),
+    onSuccess: (result) => {
+      toast.success(result.warning ? result.warning : `Synced ${result.fields.length} fields`);
+      client.invalidateQueries({ queryKey: ["desk-fields"] });
+      client.invalidateQueries({ queryKey: ["ticket-schema"] });
+    },
+    onError: (error) => toast.error(errorText(error)),
+  });
 
   const save = useMutation({
     mutationFn: (form: TicketForm) =>
@@ -89,9 +101,30 @@ function FormsPage() {
       <PageHeader
         eyebrow="Intake"
         title="Ticket forms"
-        description="Categories the desk accepts, the Zendesk field they map to, and who is allowed to use them."
-        actions={<Button onClick={() => open(blank())}>Add form</Button>}
+        description="Customer forms use the field names, choices, and required flags from the connected Zendesk account."
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" disabled={sync.isPending} onClick={() => sync.mutate()}>{sync.isPending ? "Syncing" : "Sync Zendesk fields"}</Button>
+            <Button onClick={() => open(blank())}>Add form</Button>
+          </div>
+        }
       />
+      <Panel>
+        <h2 className="text-sm font-semibold">Zendesk fields</h2>
+        <p className="mt-1 text-sm text-muted">
+          {desk.data?.warning
+            ? desk.data.warning
+            : `${desk.data?.forms.length ?? 0} customer forms · ${desk.data?.fields.length ?? 0} fields · ${(desk.data?.forms ?? []).reduce((sum, form) => sum + form.conditions.length, 0)} conditions. A child field stays hidden until its parent value matches.`}
+        </p>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {(desk.data?.fields ?? []).map((field) => (
+            <li key={field.id} className="rounded-xl border border-line px-3 py-2">
+              <p className="text-sm font-medium">{field.title}</p>
+              <p className="text-xs text-muted">{field.type}{field.required ? " · required" : ""} · {fieldAudience(field.type, field.visible)}{field.options.length ? ` · ${field.options.length} choices` : ""}</p>
+            </li>
+          ))}
+        </ul>
+      </Panel>
       <div className="grid gap-3">
         {forms.data.map((form) => (
           <button

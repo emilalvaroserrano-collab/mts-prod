@@ -26,6 +26,18 @@ export type Planned =
   | { tool: "complaint"; subject: string; body: string }
   | { tool: "update_contact"; phone: string }
   | { tool: "find_equipment"; query: string; add: boolean }
+  | { tool: "list_catalog" }
+  | { tool: "place_order"; sku: string; quantity: number; payLater: boolean }
+  | { tool: "order_detail"; id: number }
+  | { tool: "cancel_order"; id: number }
+  | { tool: "pay_order"; id: number }
+  | { tool: "list_billing" }
+  | { tool: "list_notices" }
+  | { tool: "read_notice"; id: number }
+  | { tool: "ticket_detail"; id: number }
+  | { tool: "close_ticket"; id: number }
+  | { tool: "refresh_ticket"; id: number }
+  | { tool: "update_company"; business: string; phone: string; city: string }
   | { tool: "show"; page: string }
   | { tool: "lookup"; query: string }
   | { tool: "confirm" }

@@ -8,7 +8,7 @@ export const Route = createFileRoute("/_app/access")({
   component: AccessPage,
 });
 
-function AccessPage() {
+export function AccessPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["portal-customers"], queryFn: () => listPortalCustomers() });
   const accounts = useQuery({ queryKey: ["desk-accounts"], queryFn: () => listDeskAccounts() });

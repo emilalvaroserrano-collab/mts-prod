@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_app/organizations/")({
   component: CompaniesPage,
 });
 
-function CompaniesPage() {
+export function CompaniesPage() {
   const query = useQuery({ queryKey: ["orgs"], queryFn: () => listOrgs() });
   const [open, setOpen] = useState(false);
   const [layout, setLayout] = useViewMode("mts-companies-view");

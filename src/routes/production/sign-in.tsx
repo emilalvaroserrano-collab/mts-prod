@@ -1,5 +1,7 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/production/sign-in")({
-  component: () => <Navigate to="/production/signin" />,
+  beforeLoad: () => {
+    throw redirect({ href: "/production/signin", replace: true });
+  },
 });

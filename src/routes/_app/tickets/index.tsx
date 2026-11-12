@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { listTickets } from "@/lib/portal/api";
 import { ago, day } from "@/lib/portal/format";
 import { ticketSearch } from "@/lib/portal/ticket-search";
@@ -19,9 +19,17 @@ export const Route = createFileRoute("/_app/tickets/")({
   component: TicketsPage,
 });
 
-function TicketsPage() {
-  const search = Route.useSearch();
-  const navigate = Route.useNavigate();
+export function TicketsPage() {
+  const raw = useSearch({ strict: false }) as Partial<Record<"q" | "status" | "org" | "category" | "assignee" | "view", string>>;
+  const search = ticketSearch({
+    q: raw.q ?? "",
+    status: raw.status ?? "unresolved",
+    org: raw.org ?? "",
+    category: raw.category ?? "",
+    assignee: raw.assignee ?? "",
+    view: raw.view ?? "",
+  });
+  const navigate = useNavigate();
   const query = useQuery({
     queryKey: ["tickets", search],
     queryFn: () =>
@@ -40,7 +48,7 @@ function TicketsPage() {
   const [layout, setLayout] = useViewMode("mts-tickets-view");
 
   function setSearch(partial: Partial<typeof search>) {
-    navigate({ search: (prev) => ({ ...prev, ...partial }) });
+    void navigate({ to: ".", search: { ...search, ...partial } } as never);
   }
 
   return (

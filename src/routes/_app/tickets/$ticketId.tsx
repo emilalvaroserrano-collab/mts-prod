@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getTicket, replyTicket, updateTicket } from "@/lib/portal/api";
@@ -12,8 +12,8 @@ export const Route = createFileRoute("/_app/tickets/$ticketId")({
   component: TicketPage,
 });
 
-function TicketPage() {
-  const { ticketId } = Route.useParams();
+export function TicketPage() {
+  const { ticketId = "" } = useParams({ strict: false });
   const id = Number(ticketId);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["ticket", id], queryFn: () => getTicket({ data: id }) });

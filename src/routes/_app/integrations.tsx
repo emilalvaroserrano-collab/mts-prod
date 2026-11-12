@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_app/integrations")({
   component: IntegrationPage,
 });
 
-function IntegrationPage() {
+export function IntegrationPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["integration"], queryFn: () => getIntegration() });
   const sarah = useQuery({ queryKey: ["sarah-metrics"], queryFn: () => getSarahMetrics() });
@@ -78,7 +78,7 @@ function IntegrationPage() {
   const sync = useMutation({
     mutationFn: () => syncZendesk(),
     onSuccess: (result) => {
-      toast.success(result.users ? `Imported ${result.imported} tickets and synced ${result.users} users` : `Imported ${result.imported} tickets`);
+      toast.success(`Synced ${result.imported} tickets, ${result.users} people, ${result.products ?? 0} products, ${result.orders ?? 0} orders, ${result.payments ?? 0} payments`);
       refresh();
       client.invalidateQueries({ queryKey: ["tickets"] });
       client.invalidateQueries({ queryKey: ["dashboard"] });

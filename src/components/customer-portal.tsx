@@ -4,11 +4,13 @@ import { Bell, ClipboardList, Headphones, House, LayoutDashboard, LogOut, Menu, 
 import { useState, type ReactNode } from "react";
 import { signOut } from "@/lib/auth/client";
 import { useCurrentUser } from "@/lib/auth/use-current-user";
-import { getSessionHome } from "@/lib/portal/api";
+import { getSessionHome, listCustomerNotices } from "@/lib/portal/api";
 import { getSarahStatus } from "@/lib/portal/sarah";
 import { usePortalSession } from "@/lib/portal/use-portal-session";
 import { setShopToken, useShopToken } from "@/lib/portal/shop-session";
 import { useCart } from "@/lib/portal/store-cart";
+import { usePortalLive } from "@/lib/portal/use-portal-live";
+import { PortalAtmosphere } from "@/components/portal-atmosphere";
 import { SarahHeaderButton, SarahWidget } from "@/components/sarah-widget";
 
 const NAV = [
@@ -38,12 +40,20 @@ export function PortalShell({ children }: { children: ReactNode }) {
   const home = useQuery({ queryKey: ["session-home"], queryFn: () => getSessionHome() });
   const cart = useCart();
   const token = useShopToken();
+  usePortalLive(token);
   const sarah = useQuery({
     queryKey: ["sarah-banner", token],
     queryFn: () => getSarahStatus({ data: { token } }),
     enabled: Boolean(token),
     refetchInterval: 15000,
   });
+  const notices = useQuery({
+    queryKey: ["customer-notices", token],
+    queryFn: () => listCustomerNotices({ data: token }),
+    enabled: Boolean(token),
+    refetchInterval: 60000,
+  });
+  const unread = (notices.data ?? []).filter((item) => !item.read).length;
   const [menu, setMenu] = useState(false);
   const current = NAV.find((item) => {
     const href = portalHref(path, item.to);
@@ -54,17 +64,7 @@ export function PortalShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="portal-stage grid min-h-dvh grid-rows-[auto_minmax(0,1fr)] text-ink">
-      <div className="portal-waves" aria-hidden="true">
-        <svg className="portal-wave portal-wave-top" viewBox="0 0 2880 320" preserveAspectRatio="none">
-          <path fill="currentColor" d="M0 180C240 120 480 240 720 180C960 120 1200 240 1440 180C1680 120 1920 240 2160 180C2400 120 2640 240 2880 180V320H0Z" />
-        </svg>
-        <svg className="portal-wave portal-wave-back" viewBox="0 0 2880 320" preserveAspectRatio="none">
-          <path fill="currentColor" d="M0 160C180 220 360 100 540 160C720 220 900 100 1080 160C1260 220 1440 100 1620 160C1800 220 1980 100 2160 160C2340 220 2520 100 2700 160C2790 190 2835 175 2880 160V320H0Z" />
-        </svg>
-        <svg className="portal-wave portal-wave-front" viewBox="0 0 2880 320" preserveAspectRatio="none">
-          <path fill="currentColor" d="M0 200C240 140 480 250 720 200C960 150 1200 250 1440 200C1680 150 1920 250 2160 200C2400 150 2640 250 2880 200V320H0Z" />
-        </svg>
-      </div>
+      <PortalAtmosphere />
       <header className="fixed inset-x-0 top-0 z-30 border-b border-line bg-surface/95 backdrop-blur md:sticky" style={{ paddingTop: "env(safe-area-inset-top)" }}>
         <div className="mx-auto grid h-14 w-full max-w-6xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 px-4 md:h-16 md:gap-3 md:px-8">
           <Link to={portalHref(path, "/portal") as "/portal"} className="flex min-w-0 items-center gap-2 md:hidden">
@@ -82,27 +82,30 @@ export function PortalShell({ children }: { children: ReactNode }) {
               );
             })}
             {home.data?.desk ? (
-              <a href="/dashboard" className="hidden shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-accent md:inline">
+              <a href={path.startsWith("/production") ? "/production/admin-portal" : "/dashboard"} className="hidden shrink-0 rounded-lg px-3 py-2 text-sm font-semibold text-accent md:inline">
                 Admin
               </a>
             ) : null}
           </nav>
           <div className="col-start-3 flex shrink-0 items-center justify-end">
+            <Link to={portalHref(path, "/portal/notifications") as "/portal"} data-guide="notifications" className="relative grid size-10 place-items-center rounded-xl md:size-11" aria-label={unread ? `${unread} unread notifications` : "Notifications"}>
+              <Bell className="size-5" />
+              {unread > 0 ? <span className="absolute top-0.5 right-0.5 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-white">{unread > 99 ? "99+" : unread}</span> : null}
+            </Link>
             <Link to={portalHref(path, "/portal/shop") as "/portal"} className="relative hidden size-11 place-items-center rounded-xl md:grid" aria-label="Order">
               <ClipboardList className="size-5" />
               {count > 0 ? <span className="absolute top-1 right-1 min-w-4 rounded-full bg-accent px-1 text-center text-[10px] font-semibold leading-4 text-white">{count}</span> : null}
             </Link>
-            <Link to={portalHref(path, "/portal/notifications") as "/portal"} data-guide="notifications" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Notifications"><Bell className="size-5" /></Link>
             <SarahHeaderButton />
             {home.data?.desk ? (
-              <a href="/dashboard" className="grid size-10 place-items-center rounded-xl text-accent md:hidden" aria-label="Admin">
+              <a href={path.startsWith("/production") ? "/production/admin-portal" : "/dashboard"} className="grid size-10 place-items-center rounded-xl text-accent md:hidden" aria-label="Admin">
                 <LayoutDashboard className="size-5" />
               </a>
             ) : null}
             <button type="button" className="grid size-10 place-items-center rounded-xl md:hidden" aria-label="Open menu" onClick={() => setMenu(true)}>
               <Menu className="size-5" />
             </button>
-            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut(path.startsWith("/production") ? "/production" : "/upgrade"); }}>
+            <button type="button" className="hidden size-11 place-items-center rounded-xl md:grid" aria-label="Sign out" onClick={() => { setShopToken(""); void signOut("/production/signin"); }}>
               <LogOut className="size-5" />
             </button>
           </div>
@@ -124,8 +127,11 @@ export function PortalShell({ children }: { children: ReactNode }) {
             {NAV.map((item) => (
               <Link key={item.to} to={portalHref(path, item.to) as "/portal"} data-guide={item.guide} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">{item.label}</Link>
             ))}
-            <Link to={portalHref(path, "/portal/notifications") as "/portal"} onClick={() => setMenu(false)} className="rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">Notifications</Link>
-            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut(path.startsWith("/production") ? "/production" : "/upgrade"); }}>Sign out</button>
+            <Link to={portalHref(path, "/portal/notifications") as "/portal"} onClick={() => setMenu(false)} className="flex items-center justify-between rounded-xl px-3 py-3 text-sm font-medium hover:bg-surface-2">
+              <span>Notifications</span>
+              {unread > 0 ? <span className="min-w-5 rounded-full bg-accent px-1.5 text-center text-[11px] font-semibold leading-5 text-white">{unread > 99 ? "99+" : unread}</span> : null}
+            </Link>
+            <button type="button" className="rounded-xl px-3 py-3 text-left text-sm font-medium" onClick={() => { setMenu(false); setShopToken(""); void signOut("/production/signin"); }}>Sign out</button>
           </div>
         </div>
       ) : null}

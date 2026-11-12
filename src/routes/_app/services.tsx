@@ -11,7 +11,7 @@ export const Route = createFileRoute("/_app/services")({
 
 const STATUSES = ["requested", "quoted", "approved", "provisioning", "active", "declined"];
 
-function ServicesDesk() {
+export function ServicesDesk() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["service-desk"], queryFn: () => listServiceDesk() });
   const [note, setNote] = useState<Record<number, string>>({});

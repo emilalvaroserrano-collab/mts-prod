@@ -2,5 +2,14 @@
   "framework": null,
   "buildCommand": "npm run build",
   "installCommand": "npm install --omit=dev --no-audit --no-fund",
+  "redirects": [
+    { "source": "/", "destination": "/production/signin", "permanent": false },
+    { "source": "/production", "destination": "/production/signin", "permanent": false },
+    { "source": "/login", "destination": "/production/signin", "permanent": false },
+    { "source": "/portal/login", "destination": "/production/signin", "permanent": false },
+    { "source": "/portal/register", "destination": "/production/signin", "permanent": false },
+    { "source": "/production/sign-in", "destination": "/production/signin", "permanent": false },
+    { "source": "/production/home", "destination": "/production/user-portal", "permanent": false }
+  ],
   "crons": [{ "path": "/api/jobs/run", "schedule": "0 * * * *" }]
 }

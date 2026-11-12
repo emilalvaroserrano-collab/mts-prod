@@ -325,7 +325,7 @@ After Confirm: phone saved, plus desk ticket id and Zendesk id when the copy suc
   },
 ];
 
-function DocsPage() {
+export function DocsPage() {
   const [query, setQuery] = useState("");
   const needle = query.trim().toLowerCase();
   const groups = useMemo(

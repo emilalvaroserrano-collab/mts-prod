@@ -1,4 +1,5 @@
 import type { Sql } from "@/lib/db";
+import { renderSignature } from "./email-signature";
 
 let fileEnv: Record<string, string> | null = null;
 
@@ -258,10 +259,17 @@ export async function resolveMail(sql: Sql) {
 async function deliverEmail(sql: Sql, to: string, subject: string, body: string) {
   const mail = await resolveMail(sql);
   if (!mail.key || !mail.from) return { ok: false, error: "Add a Resend API key in Settings." };
+  let signoff = renderSignature("", "MTS Support");
+  try {
+    const rows = await sql<Row>`select email_signature, reply_name from portal_settings where id = 1`;
+    signoff = renderSignature(rows[0] ? s(rows[0], "email_signature") : "", rows[0] ? s(rows[0], "reply_name") : "MTS Support");
+  } catch {
+    /* the signature column is added with the next settings save */
+  }
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${mail.key}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: mail.from, to: [to], subject, text: body }),
+    body: JSON.stringify({ from: mail.from, to: [to], subject, text: `${body}\n\n${signoff}` }),
   });
   if (!response.ok) {
     const text = await response.text();

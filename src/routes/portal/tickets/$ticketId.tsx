@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams, useRouterState } from "@tanstack/react-router";
 import { useState } from "react";
 import { getPortalTicket, refreshPortalTicket, replyPortalTicket } from "@/lib/portal/api";
 import { useShopToken } from "@/lib/portal/shop-session";
@@ -39,23 +39,26 @@ export function TicketDetail() {
     onError: (error) => setNotice(error instanceof Error ? error.message : "Could not reply."),
   });
   const ticket = detail.data;
+  const path = useRouterState({ select: (state) => state.location.pathname });
+  const listTo = path.startsWith("/production/user-portal") ? "/production/user-portal/tickets" : "/portal/tickets";
   if (detail.isPending) return <p className="text-sm text-muted">Opening the ticket…</p>;
   if (detail.isError || !ticket) return <p className="text-sm text-bad">{detail.error instanceof Error ? detail.error.message : "Ticket not found."}</p>;
 
   return (
     <div className="grid w-full gap-4">
-      <Link to="/portal/tickets" className="text-sm text-muted">All tickets</Link>
+      <Link to={listTo as "/portal/tickets"} className="text-sm text-muted">All tickets</Link>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{ticket.subject}</h1>
-          <p className="mt-1 text-sm text-muted">{ticket.status} · {ticket.category}{ticket.zendeskId ? ` · Zendesk #${ticket.zendeskId}` : " · Not in Zendesk yet"}</p>
+          <p className="mt-1 text-sm text-muted">{ticket.status} · {ticket.category}{/^\d+$/.test(ticket.zendeskId) ? ` · Zendesk #${ticket.zendeskId}` : ""}</p>
+          {!ticket.zendeskId && ticket.zendeskWarning ? <p className="mt-2 text-sm text-[#8e1f0b]">{ticket.zendeskWarning}</p> : null}
         </div>
         <button type="button" className="h-10 shrink-0 rounded-full border border-line px-3 text-xs font-semibold" onClick={() => refresh.mutate()} disabled={refresh.isPending}>{refresh.isPending ? "Syncing" : "Refresh"}</button>
       </div>
       <ul className="grid gap-2">
         {ticket.comments.map((comment, index) => (
           <li key={`${comment.at}-${index}`} className="rounded-xl border border-line bg-surface px-4 py-3 text-sm">
-            <p className="text-xs font-semibold text-muted">{comment.author || "Desk"}</p>
+            <p className="text-xs font-semibold text-muted">{comment.author === "Zendesk" || !comment.author ? "MTS Support" : comment.author}</p>
             <p className="mt-1 whitespace-pre-wrap">{comment.body}</p>
           </li>
         ))}

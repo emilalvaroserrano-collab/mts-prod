@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { Bell, Building2, ChevronLeft, ClipboardList, CreditCard, Monitor, Shield, Ticket, Users } from "lucide-react";
 import { useEffect } from "react";
 import { getNotification } from "@/lib/portal/api";
@@ -27,8 +27,8 @@ const KINDS: Record<string, { label: string; icon: typeof Bell; tone: string }> 
   desk: { label: "Desk", icon: Shield, tone: "bg-surface-2 text-ink" },
 };
 
-function NotificationPage() {
-  const { notificationId } = Route.useParams();
+export function NotificationPage() {
+  const { notificationId = "" } = useParams({ strict: false });
   const id = Number(notificationId);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["notification", id], queryFn: () => getNotification({ data: id }) });

@@ -1,8 +1,8 @@
 type ZendeskInvite = { email: string; name: string };
 
 const subdomain = process.env.ZENDESK_SUBDOMAIN?.trim() || "mts-portal";
-const clientId = process.env.ZENDESK_OAUTH_CLIENT_ID?.trim() || "manage_tech_service";
-const clientSecret = process.env.ZENDESK_OAUTH_CLIENT_SECRET?.trim() || "99e8abb6231c965eac620c7ed3f7a8a6d5ef5264a4e8138fc394dfca39065743";
+const clientId = process.env.ZENDESK_OAUTH_CLIENT_ID?.trim() || "mts-portal";
+const clientSecret = process.env.ZENDESK_OAUTH_CLIENT_SECRET?.trim() || "2323b62739554021211eaa17dc81221200a1dda3f362d1d7323ae09ecde4aee1";
 
 let tokenCache: { token: string; expiresAt: number } | null = null;
 
@@ -18,7 +18,7 @@ async function zendeskToken() {
         grant_type: "client_credentials",
         client_id: clientId,
         client_secret: clientSecret,
-        scope: "read",
+        scope: "read write",
       }),
     });
     const text = await response.text();
@@ -40,13 +40,21 @@ export function zendeskSupportToken() {
   return zendeskToken();
 }
 
+async function authorizationHeader() {
+  const email = (process.env.ZENDESK_EMAIL || process.env.ZENDESK_AGENT_EMAIL || "").trim();
+  const apiToken = (process.env.ZENDESK_API_TOKEN || process.env.ZENDESK_TOKEN || process.env.ZENDESK_API_KEY || "").trim();
+  if (email && apiToken) {
+    const raw = `${email}/token:${apiToken}`;
+    return `Basic ${Buffer.from(raw, "utf8").toString("base64")}`;
+  }
+  return `Bearer ${await zendeskToken()}`;
+}
+
 export async function findZendeskInvite(email: string): Promise<ZendeskInvite | null> {
   const normalized = email.trim().toLowerCase();
   if (!normalized.includes("@")) return null;
-  const token = await zendeskToken();
-  const query = `type:user email:${normalized}`;
-  const response = await fetch(`https://${subdomain}.zendesk.com/api/v2/users/search.json?query=${encodeURIComponent(query)}`, {
-    headers: { Accept: "application/json", Authorization: `Bearer ${token}` },
+  const response = await fetch(`https://${subdomain}.zendesk.com/api/v2/users/search.json?query=${encodeURIComponent(`type:user email:${normalized}`)}`, {
+    headers: { Accept: "application/json", Authorization: await authorizationHeader() },
   });
   if (!response.ok) throw new Error("Invitation check is unavailable.");
   const body = (await response.json()) as {

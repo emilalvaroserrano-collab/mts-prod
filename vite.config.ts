@@ -1,3 +1,4 @@
+import { WebSocketServer, type WebSocket } from "ws";
 import { readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { Plugin } from "vite";
@@ -30,6 +31,64 @@ function hasGlobbedMigrations(root: string): boolean {
  * migrations — no schema to apply — skips it entirely rather than paying for a
  * PGLite instance it never queries.
  */
+function liveSocketPlugin(): Plugin {
+  return {
+    name: "mts-live-socket",
+    configureServer(server) {
+      const wss = new WebSocketServer({ noServer: true });
+      server.httpServer?.on("upgrade", (req, socket, head) => {
+        const pathOnly = (req.url ?? "").split("?", 1)[0] ?? "";
+        if (pathOnly !== "/api/live") return;
+        wss.handleUpgrade(req, socket, head, (ws) => {
+          wss.emit("connection", ws, req);
+        });
+      });
+      wss.on("connection", (socket: WebSocket) => {
+        let customerId = 0;
+        let release = () => {};
+        const helloTimer = setTimeout(() => socket.close(), 8000);
+        socket.on("message", (raw) => {
+          void (async () => {
+            let body: { type?: string; token?: string } = {};
+            try {
+              body = JSON.parse(String(raw)) as { type?: string; token?: string };
+            } catch {
+              socket.close();
+              return;
+            }
+            if (body.type !== "hello" || customerId || typeof body.token !== "string") return;
+            const mod = (await server.ssrLoadModule("/src/lib/portal/live-auth.ts")) as {
+              customerIdForShopToken: (token: string) => Promise<number>;
+            };
+            const hub = (await server.ssrLoadModule("/src/lib/portal/live.ts")) as {
+              bindLiveSocket: (id: number, sock: { send: (data: string) => void }) => () => void;
+            };
+            const id = await mod.customerIdForShopToken(body.token);
+            if (!id) {
+              socket.close();
+              return;
+            }
+            clearTimeout(helloTimer);
+            customerId = id;
+            release = hub.bindLiveSocket(id, socket);
+            socket.send(JSON.stringify({ type: "ready" }));
+          })().catch(() => socket.close());
+        });
+        socket.on("close", () => {
+          clearTimeout(helloTimer);
+          release();
+        });
+      });
+      const beat = setInterval(() => {
+        for (const client of wss.clients) {
+          if (client.readyState === client.OPEN) client.ping();
+        }
+      }, 25000);
+      server.httpServer?.on("close", () => clearInterval(beat));
+    },
+  };
+}
+
 function pgliteBootstrapPlugin(): Plugin {
   return {
     name: "app-builder:pglite-bootstrap",
@@ -159,6 +218,7 @@ export default defineConfig(({ command, isPreview }) => ({
   resolve: { tsconfigPaths: true },
   plugins: [
     pgliteBootstrapPlugin(),
+    liveSocketPlugin(),
     // Before tanstackStart so /auth/popup never falls through to the SPA.
     authPopupPlugin(),
     // Dev-only /__app-env, read by scripts/check-auth-invariant.mjs.

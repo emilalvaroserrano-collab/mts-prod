@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_app/campaigns")({
   component: CampaignAdmin,
 });
 
-function CampaignAdmin() {
+export function CampaignAdmin() {
   const client = useQueryClient();
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

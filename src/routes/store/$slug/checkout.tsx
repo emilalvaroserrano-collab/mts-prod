@@ -316,7 +316,7 @@ export function Checkout() {
             >
               <h1 className="flex items-center gap-2 text-lg font-semibold"><Lock className="size-4" /> Payment</h1>
               {checkout.data && !checkout.data.signedIn ? (
-                <a href="/upgrade" className="flex h-12 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-white">Sign in to the customer portal</a>
+                <a href="/production/signin" className="flex h-12 items-center justify-center rounded-xl bg-ink text-sm font-semibold text-white">Sign in to the customer portal</a>
               ) : null}
               {checkout.data?.signedIn && !checkout.data.canPurchase ? (
                 <p className="rounded-xl bg-warn-soft px-4 py-3 text-sm text-warn">This account cannot purchase products.</p>

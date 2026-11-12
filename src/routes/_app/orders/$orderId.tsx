@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { deleteOrder, getOrder, linkOrderTicket, refreshAlternativeOrder, trackAwb, updateOrder } from "@/lib/portal/api";
@@ -35,8 +35,8 @@ function printAwb(number: string) {
   popup.document.close();
 }
 
-function OrderPage() {
-  const { orderId } = Route.useParams();
+export function OrderPage() {
+  const { orderId = "" } = useParams({ strict: false });
   const id = Number(orderId);
   const client = useQueryClient();
   const navigate = useNavigate();

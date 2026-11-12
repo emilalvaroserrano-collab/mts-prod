@@ -13,6 +13,12 @@ function env(name: string) {
   return (process.env[name] || "").trim();
 }
 
+const portalWebhookSecrets = [
+  "c8Y3p8P21pGmi6pkC4C7OiOsNZwpuFrtU2_XxnEFnUaDFoJY7UdU5YNTLDLB-JzqvIEgzDDGrUGsBqqEc3ApqA",
+  "XDssQcMUj1LV5-yWyRc8T_28PLJDLNrD51_ouxJNAHc=",
+  "lTc1CDwG0MDH2YPTvERxwC9sZUD4UFFR-e84dauLIz4=",
+];
+
 const shopConversations = {
   appId: "6af379dcb61f6ac20d1e3df8",
   keyId: "app_6af39b614c735f82a19f2d89",
@@ -67,29 +73,30 @@ export async function testConversations() {
 }
 
 export async function verifyZendeskWebhook(request: Request, rawBody: string) {
-  const config = conversationsConfig();
-  if (!config.webhookSecret) {
-    throw new Error("ZENDESK_WEBHOOK_SECRET is not set.");
-  }
   const signature = request.headers.get("x-zendesk-webhook-signature") || "";
   const timestamp = request.headers.get("x-zendesk-webhook-signature-timestamp") || "";
-  const webhookId = request.headers.get("x-zendesk-webhook-id") || "";
   if (!signature || !timestamp) throw new Error("Missing Zendesk webhook signature.");
-  if (config.webhookId && webhookId && webhookId !== config.webhookId) {
-    throw new Error("Webhook ID does not match.");
-  }
   const sent = Number(timestamp);
   const millis = Number.isFinite(sent) ? (sent > 1e12 ? sent : sent * 1000) : Date.parse(timestamp);
   if (!Number.isFinite(millis) || Math.abs(Date.now() - millis) > 5 * 60 * 1000) {
     throw new Error("Webhook timestamp is outside the allowed window.");
   }
+  const secrets = [
+    ...new Set(
+      [env("ZENDESK_WEBHOOK_SECRET"), env("ZENDESK_EVENT_WEBHOOK_SECRET"), env("ZENDESK_TRIGGER_WEBHOOK_SECRET"), portalConversations.webhookSecret, ...portalWebhookSecrets]
+        .filter((item): item is string => typeof item === "string" && item.trim() !== "")
+        .map((item) => item.trim()),
+    ),
+  ];
+  if (!secrets.length) throw new Error("ZENDESK_WEBHOOK_SECRET is not set.");
   const { createHmac, timingSafeEqual } = await import("node:crypto");
-  const expected = createHmac("sha256", config.webhookSecret).update(timestamp + rawBody).digest("base64");
-  const left = Buffer.from(signature);
-  const right = Buffer.from(expected);
-  if (left.length !== right.length || !timingSafeEqual(left, right)) {
-    throw new Error("Webhook signature does not match.");
-  }
+  const matched = secrets.some((secret) => {
+    const expected = createHmac("sha256", secret).update(timestamp + rawBody).digest("base64");
+    const left = Buffer.from(signature);
+    const right = Buffer.from(expected);
+    return left.length === right.length && timingSafeEqual(left, right);
+  });
+  if (!matched) throw new Error("Webhook signature does not match.");
 }
 
 type Row = Record<string, unknown>;

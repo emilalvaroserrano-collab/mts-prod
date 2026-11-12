@@ -10,7 +10,7 @@ export const Route = createFileRoute("/_app/payments")({
   component: PaymentsPage,
 });
 
-function PaymentsPage() {
+export function PaymentsPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["payments"], queryFn: () => getPayments() });
   const [cardEnabled, setCardEnabled] = useState(false);

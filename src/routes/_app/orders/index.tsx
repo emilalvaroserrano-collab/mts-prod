@@ -22,7 +22,7 @@ function matchesView(order: Order, view: string) {
   return true;
 }
 
-function OrdersPage() {
+export function OrdersPage() {
   const query = useQuery({ queryKey: ["orders"], queryFn: () => listOrders() });
   const people = useQuery({ queryKey: ["people"], queryFn: () => getPeople() });
   const products = useQuery({ queryKey: ["products"], queryFn: () => listProducts() });

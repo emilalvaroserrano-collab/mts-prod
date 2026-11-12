@@ -198,6 +198,32 @@ export type TicketForm = {
   active: boolean;
 };
 
+export type DeskFieldOption = { name: string; value: string };
+
+export type DeskField = {
+  id: string;
+  key: string;
+  title: string;
+  description: string;
+  type: string;
+  required: boolean;
+  visible: boolean;
+  options: DeskFieldOption[];
+};
+
+export type DeskCondition = {
+  parentId: string;
+  value: string;
+  children: { id: string; required: boolean }[];
+};
+
+export type DeskForm = {
+  id: string;
+  name: string;
+  fieldIds: string[];
+  conditions: DeskCondition[];
+};
+
 export type Policy = {
   id: string;
   label: string;
@@ -240,6 +266,8 @@ export type PortalSettings = {
   brandName: string;
   supportEmail: string;
   tagline: string;
+  replyName: string;
+  emailSignature: string;
   notifyNewTicket: boolean;
   notifyNewOrder: boolean;
   customerCatalogVisible: boolean;
@@ -427,6 +455,7 @@ export type PortalTicket = {
   status: string;
   category: string;
   zendeskId: string;
+  zendeskWarning: string;
   updatedAt: string;
   comments: PortalComment[];
 };
@@ -439,6 +468,8 @@ export type PortalSession = {
   organization: string;
   interests: string[];
   verified: boolean;
+  zendeskRole: string;
+  timeZone: string;
   grants: { shop: boolean; services: boolean; invoice: boolean };
 };
 

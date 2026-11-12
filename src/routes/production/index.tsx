@@ -1,12 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { ProductionHome } from "@/components/production-home";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/production/")({
-  head: () => ({
-    meta: [
-      { title: "Manage Tech Service" },
-      { name: "description", content: "Technology that drives business success. Managed IT, cloud, projects, and a full-service help desk." },
-    ],
-  }),
-  component: ProductionHome,
+  beforeLoad: () => {
+    throw redirect({ href: "/production/signin", replace: true });
+  },
 });

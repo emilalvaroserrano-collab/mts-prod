@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { getOrg, saveOrg } from "@/lib/portal/api";
@@ -12,8 +12,8 @@ export const Route = createFileRoute("/_app/organizations/$orgId")({
   component: CompanyPage,
 });
 
-function CompanyPage() {
-  const { orgId } = Route.useParams();
+export function CompanyPage() {
+  const { orgId = "" } = useParams({ strict: false });
   const id = Number(orgId);
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["org", id], queryFn: () => getOrg({ data: id }) });

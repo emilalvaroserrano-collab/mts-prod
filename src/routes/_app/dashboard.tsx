@@ -9,7 +9,7 @@ export const Route = createFileRoute("/_app/dashboard")({
   component: DashboardPage,
 });
 
-function DashboardPage() {
+export function DashboardPage() {
   const query = useQuery({ queryKey: ["dashboard"], queryFn: () => getDashboard() });
   if (query.isPending) return <Loading />;
   if (query.isError) return <ErrorNote message={query.error.message} />;

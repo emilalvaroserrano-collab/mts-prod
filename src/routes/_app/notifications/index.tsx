@@ -32,7 +32,7 @@ function kindOf(notice: Notice) {
   return KINDS[notice.kind] ?? { label: notice.kind || "Desk", icon: Bell, tone: "bg-surface-2 text-ink" };
 }
 
-function NotificationsPage() {
+export function NotificationsPage() {
   const query = useQuery({ queryKey: ["notifications"], queryFn: () => listNotifications() });
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const unread = query.data?.filter((notice) => !notice.read).length ?? 0;

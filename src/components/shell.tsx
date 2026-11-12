@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { PortalAtmosphere } from "@/components/portal-atmosphere";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   Building2,
@@ -63,6 +64,17 @@ const NAV_COUNTS: Partial<Record<(typeof NAV)[number]["to"], (info: ShellInfo) =
   "/notifications": (info) => info.noticeCount,
 };
 
+function adminHref(path: string, to: string) {
+  if (!path.startsWith("/production/admin-portal")) return to;
+  if (to === "/dashboard") return "/production/admin-portal";
+  return `/production/admin-portal${to}`;
+}
+
+function adminActive(path: string, to: string, exact = false) {
+  const href = adminHref(path, to);
+  return exact ? path === href || path === `${href}/` : path === href || path.startsWith(`${href}/`);
+}
+
 function roleLabel(role: Role | undefined) {
   if (role === "owner") return "Super Admin";
   if (role === "admin") return "Admin";
@@ -91,7 +103,7 @@ export function Shell({ children }: { children: ReactNode }) {
   }, [path]);
 
   useEffect(() => {
-    const item = NAV.find((entry) => ("exact" in entry && entry.exact ? path === entry.to : path === entry.to || path.startsWith(`${entry.to}/`)));
+    const item = NAV.find((entry) => adminActive(path, entry.to, "exact" in entry && entry.exact));
     document.title = item ? `${item.label} · Manage Tech Service` : "Manage Tech Service";
   }, [path]);
 
@@ -107,14 +119,16 @@ export function Shell({ children }: { children: ReactNode }) {
     });
   }
 
-  if (isPending || (user && shell.isPending)) return <Boot />;
-  if (!user) return null;
+  const productionAdmin = path.startsWith("/production/admin-portal");
+  if (!productionAdmin && (isPending || (user && shell.isPending))) return <Boot />;
+  if (!user && !productionAdmin) return null;
+  if (productionAdmin && !isPending && !user) return null;
   const info = shell.data;
-  const current = NAV.find((entry) => ("exact" in entry && entry.exact ? path === entry.to : path === entry.to || path.startsWith(`${entry.to}/`)));
+  const current = NAV.find((entry) => adminActive(path, entry.to, "exact" in entry && entry.exact));
 
   function Nav({ compact }: { compact: boolean }) {
     return (
-      <div className="flex h-full flex-col bg-surface">
+      <div className="flex h-full flex-col bg-surface/80 backdrop-blur">
         <div className={compact ? "flex h-16 shrink-0 items-center justify-center border-b border-line px-2" : "flex h-16 shrink-0 items-center gap-3 border-b border-line px-4"}>
           <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-ink text-xs font-semibold tracking-wide text-white">MT</span>
           {compact ? null : (
@@ -151,13 +165,14 @@ export function Shell({ children }: { children: ReactNode }) {
               {compact ? <div className="mx-2 mb-1 h-px bg-line" /> : <p className="px-2 pb-1 text-[11px] font-semibold tracking-[0.14em] text-subtle uppercase">{group}</p>}
               <div className="flex flex-col gap-0.5">
                 {NAV.filter((item) => item.group === group).map((item) => {
-                  const active = "exact" in item && item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`);
+                  const href = adminHref(path, item.to);
+                  const active = adminActive(path, item.to, "exact" in item && item.exact);
                   const Icon = item.icon;
                   const count = info ? NAV_COUNTS[item.to]?.(info) : undefined;
                   return (
                     <Link
                       key={item.to}
-                      to={item.to}
+                      to={href as "/dashboard"}
                       search={item.to === "/tickets" ? ticketSearch() : undefined}
                       aria-current={active ? "page" : undefined}
                       title={compact ? `${item.label}${count != null ? ` (${count})` : ""}` : undefined}
@@ -184,7 +199,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 {group === "Commerce" ? (
                   <>
                   <a
-                    href={`/store/${storeSlug(info?.brandName ?? "Manage Tech Service")}`}
+                    href={path.startsWith("/production/admin-portal") ? "/production/user-portal/shop" : `/store/${storeSlug(info?.brandName ?? "Manage Tech Service")}`}
                     target="_blank"
                     rel="noreferrer"
                     title={compact ? "Online Shop" : undefined}
@@ -194,7 +209,7 @@ export function Shell({ children }: { children: ReactNode }) {
                     {compact ? null : "Online Shop"}
                   </a>
                   <a
-                    href="/portal"
+                    href={path.startsWith("/production/admin-portal") ? "/production/user-portal" : "/portal"}
                     title={compact ? "Customer portal" : undefined}
                     className={compact ? "flex h-11 items-center justify-center rounded-xl text-muted hover:bg-surface-2 hover:text-ink" : "flex h-11 items-center gap-2.5 rounded-xl px-3 text-sm font-medium text-muted hover:bg-surface-2 hover:text-ink"}
                   >
@@ -219,7 +234,9 @@ export function Shell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className={collapsed ? "min-h-screen text-ink md:grid md:grid-cols-[4.5rem_minmax(0,1fr)]" : "min-h-screen text-ink md:grid md:grid-cols-[16.5rem_minmax(0,1fr)]"}>
+    <div className="portal-stage min-h-screen text-ink">
+      <PortalAtmosphere />
+      <div className={collapsed ? "min-h-screen md:grid md:grid-cols-[4.5rem_minmax(0,1fr)]" : "min-h-screen md:grid md:grid-cols-[16.5rem_minmax(0,1fr)]"}>
       <aside className="hidden border-r border-line md:sticky md:top-0 md:block md:h-screen"><Nav compact={collapsed} /></aside>
       {more ? (
         <div className="fixed inset-0 z-40 md:hidden">
@@ -234,12 +251,12 @@ export function Shell({ children }: { children: ReactNode }) {
             <div className="grid grid-cols-3 gap-2">
               {NAV.filter((item) => !MOBILE_TABS.includes(item.to as (typeof MOBILE_TABS)[number])).map((item) => {
                 const Icon = item.icon;
-                const active = path === item.to || path.startsWith(`${item.to}/`);
+                const active = adminActive(path, item.to);
                 const count = info ? NAV_COUNTS[item.to]?.(info) : undefined;
                 return (
                   <Link
                     key={item.to}
-                    to={item.to}
+                    to={adminHref(path, item.to) as "/dashboard"}
                     className={active ? "grid min-h-20 content-center justify-items-center gap-1 rounded-2xl bg-ink px-2 py-3 text-center text-white" : "grid min-h-20 content-center justify-items-center gap-1 rounded-2xl bg-surface-2 px-2 py-3 text-center text-ink"}
                   >
                     <Icon className="size-5" strokeWidth={1.75} />
@@ -249,7 +266,7 @@ export function Shell({ children }: { children: ReactNode }) {
                 );
               })}
               <a
-                href={`/store/${storeSlug(info?.brandName ?? "Manage Tech Service")}`}
+                href={path.startsWith("/production/admin-portal") ? "/production/user-portal/shop" : `/store/${storeSlug(info?.brandName ?? "Manage Tech Service")}`}
                 target="_blank"
                 rel="noreferrer"
                 className="grid min-h-20 content-center justify-items-center gap-1 rounded-2xl bg-surface-2 px-2 py-3 text-center text-ink"
@@ -262,7 +279,7 @@ export function Shell({ children }: { children: ReactNode }) {
         </div>
       ) : null}
       <div className="grid min-h-screen min-w-0 grid-rows-[auto_minmax(0,1fr)]">
-        <header className="sticky top-0 z-20 border-b border-line bg-surface/95 backdrop-blur">
+        <header className="sticky top-0 z-20 border-b border-line bg-surface/80 backdrop-blur">
           <div className="grid h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-2 px-3 md:grid-cols-[auto_minmax(0,1fr)_auto] md:gap-3 md:px-5">
             <div className="min-w-0 md:hidden">
               <p className="text-[11px] font-semibold tracking-[0.14em] text-subtle uppercase">{current?.group ?? "Desk"}</p>
@@ -276,7 +293,7 @@ export function Shell({ children }: { children: ReactNode }) {
               className="relative hidden min-w-0 md:block"
               onSubmit={(event) => {
                 event.preventDefault();
-                navigate({ to: "/tickets", search: ticketSearch({ q: query.trim(), status: "all" }) });
+                navigate({ to: adminHref(path, "/tickets") as "/tickets", search: ticketSearch({ q: query.trim(), status: "all" }) });
               }}
             >
               <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle" />
@@ -290,7 +307,7 @@ export function Shell({ children }: { children: ReactNode }) {
             </form>
             <div className="grid grid-flow-col items-center gap-1">
               <Link
-                to="/notifications"
+                to={adminHref(path, "/notifications") as "/notifications"}
                 className="relative grid size-11 place-items-center rounded-xl text-ink"
                 aria-label={info?.noticeCount ? `${info.noticeCount} unread notifications` : "Notifications"}
               >
@@ -318,7 +335,7 @@ export function Shell({ children }: { children: ReactNode }) {
               className="grid px-3 pb-3 md:hidden"
               onSubmit={(event) => {
                 event.preventDefault();
-                navigate({ to: "/tickets", search: ticketSearch({ q: query.trim(), status: "all" }) });
+                navigate({ to: adminHref(path, "/tickets") as "/tickets", search: ticketSearch({ q: query.trim(), status: "all" }) });
               }}
             >
               <Input
@@ -338,17 +355,17 @@ export function Shell({ children }: { children: ReactNode }) {
           ) : null}
         </header>
         <div className="admin-main grid w-full min-w-0 max-w-full content-start py-5 pb-[max(6.5rem,env(safe-area-inset-bottom))] md:pb-6">{children}</div>
-        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/95 px-1 pt-1 backdrop-blur md:hidden" style={{ paddingBottom: "max(0.35rem, env(safe-area-inset-bottom))" }} aria-label="Admin">
+        <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-surface/80 px-1 pt-1 backdrop-blur md:hidden" style={{ paddingBottom: "max(0.35rem, env(safe-area-inset-bottom))" }} aria-label="Admin">
           {MOBILE_TABS.map((to) => {
             const item = NAV.find((entry) => entry.to === to);
             if (!item) return null;
             const Icon = item.icon;
-            const active = "exact" in item && item.exact ? path === item.to : path === item.to || path.startsWith(`${item.to}/`);
+            const active = adminActive(path, item.to, "exact" in item && item.exact);
             const count = info ? NAV_COUNTS[item.to]?.(info) : undefined;
             return (
               <Link
                 key={to}
-                to={item.to}
+                to={adminHref(path, item.to) as "/dashboard"}
                 search={item.to === "/tickets" ? ticketSearch() : undefined}
                 aria-current={active ? "page" : undefined}
                 className={active ? "grid min-h-14 place-items-center gap-0.5 text-ink" : "grid min-h-14 place-items-center gap-0.5 text-muted"}
@@ -371,6 +388,7 @@ export function Shell({ children }: { children: ReactNode }) {
             <span className="text-[11px] font-medium">More</span>
           </button>
         </nav>
+      </div>
       </div>
     </div>
   );

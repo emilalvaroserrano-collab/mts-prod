@@ -6,7 +6,7 @@ import { getSettings, saveResend, saveSettings, saveStaff, sendTestEmail, testRe
 import type { PortalSettings, Role, Staff } from "@/lib/portal/types";
 import { ago } from "@/lib/portal/format";
 import { useCurrentUserState } from "@/lib/auth/use-current-user";
-import { Button, ErrorNote, Field, Input, Loading, PageHeader, Panel, Select, Toggle, errorText } from "@/components/ui";
+import { Button, ErrorNote, Field, Input, Loading, PageHeader, Panel, Select, Textarea, Toggle, errorText } from "@/components/ui";
 
 export const Route = createFileRoute("/_app/settings")({
   component: SettingsPage,
@@ -19,7 +19,7 @@ const ROLE_LABEL: Record<Role, string> = {
   viewer: "Viewer",
 };
 
-function SettingsPage() {
+export function SettingsPage() {
   const client = useQueryClient();
   const query = useQuery({ queryKey: ["settings"], queryFn: () => getSettings() });
   const [settings, setSettings] = useState<PortalSettings | null>(null);
@@ -44,8 +44,9 @@ function SettingsPage() {
 
   const save = useMutation({
     mutationFn: (next: PortalSettings) => saveSettings({ data: next }),
-    onSuccess: () => {
-      toast.success("Portal settings saved");
+    onSuccess: (result) => {
+      toast.success(result.zendeskWarning ? "Saved here. Zendesk did not take the signature yet." : "Portal settings saved");
+      if (result.zendeskWarning) toast.error(result.zendeskWarning);
       client.invalidateQueries({ queryKey: ["settings"] });
       client.invalidateQueries({ queryKey: ["shell"] });
     },
@@ -134,6 +135,12 @@ function SettingsPage() {
             </Field>
             <Field label="Tagline">
               <Input value={settings.tagline} onChange={(event) => setSettings({ ...settings, tagline: event.target.value })} />
+            </Field>
+            <Field label="Ticket reply name" hint="Shown on public support replies instead of Zendesk.">
+              <Input value={settings.replyName} onChange={(event) => setSettings({ ...settings, replyName: event.target.value })} required />
+            </Field>
+            <Field label="Email signature" hint="Used on ticket emails, agent replies, and mail sent from this portal. {{agent.name}} becomes the person who replies.">
+              <Textarea value={settings.emailSignature} onChange={(event) => setSettings({ ...settings, emailSignature: event.target.value })} rows={6} />
             </Field>
             <Toggle
               checked={settings.notifyNewTicket}
